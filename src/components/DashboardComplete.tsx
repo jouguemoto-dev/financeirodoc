@@ -199,7 +199,7 @@ export const DashboardComplete: React.FC<DashboardCompleteProps> = ({
 
         {/* Barra de Progresso do Orçamento (Comprometimento da Renda) */}
         <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
-          <div className="flex items-center justify-between text-xs font-semibold">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-semibold">
             <span className="text-slate-500 flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-emerald-600" />
               Comprometimento da Renda Mensal
@@ -226,7 +226,7 @@ export const DashboardComplete: React.FC<DashboardCompleteProps> = ({
             />
           </div>
 
-          <div className="flex items-center gap-4 text-[11px] text-slate-500 pt-0.5">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 text-[11px] text-slate-500 pt-0.5">
             <div className="flex items-center gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
               <span>Despesas Fixas ({metrics.totalIncome > 0 ? ((metrics.totalFixedExpenses / metrics.totalIncome) * 100).toFixed(0) : 0}%)</span>
@@ -236,7 +236,7 @@ export const DashboardComplete: React.FC<DashboardCompleteProps> = ({
               <span>Faturas dos Cartões ({metrics.totalIncome > 0 ? ((metrics.totalCredit / metrics.totalIncome) * 100).toFixed(0) : 0}%)</span>
             </div>
             {metrics.netBalance > 0 && (
-              <div className="flex items-center gap-1.5 text-emerald-600 font-medium ml-auto">
+              <div className="flex items-center gap-1.5 text-emerald-600 font-medium sm:ml-auto">
                 <PiggyBank className="w-3.5 h-3.5" />
                 <span>Sobra Disponível: {formatMoney(metrics.netBalance)} ({metrics.savingsRate.toFixed(0)}%)</span>
               </div>

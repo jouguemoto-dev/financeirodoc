@@ -12,6 +12,7 @@ import { InstallmentModal } from './components/InstallmentModal';
 import { SettingsModal } from './components/SettingsModal';
 import { InvoiceModal } from './components/InvoiceModal';
 import { DashboardComplete } from './components/DashboardComplete';
+import { ChatTransactionModal } from './components/ChatTransactionModal';
 import { Transaction, FilterType, FilterStatus } from './types';
 import { INITIAL_TRANSACTIONS } from './data/initialData';
 import { exportTransactionsToCSV, formatMoney } from './utils/formatters';
@@ -34,7 +35,11 @@ import {
   CreditCard, 
   ReceiptText, 
   Layers,
-  Sparkles
+  Sparkles,
+  Plus,
+  Settings,
+  MessageSquareQuote,
+  Bot
 } from 'lucide-react';
 
 const STORAGE_KEY = 'finances_2026_v1';
@@ -113,6 +118,7 @@ export default function App() {
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [selectedCardForInstallment, setSelectedCardForInstallment] = useState<string>('Cartão Neon');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
 
   // Modal da Fatura de Cartão (Clicar nos cartões para abrir fatura, pagar e alterar valor)
   const [selectedInvoiceCard, setSelectedInvoiceCard] = useState<Transaction | null>(null);
@@ -649,17 +655,22 @@ export default function App() {
         onLogin={handleGoogleLogin}
         onLogout={handleLogout}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenNewTransaction={() => {
+          setEditingTx(null);
+          setIsTxModalOpen(true);
+        }}
+        onOpenChat={() => setIsChatModalOpen(true)}
       />
 
       {/* Banner Informativo em Modo Convidado */}
       {!user && isGuestMode && (
-        <div className={`border-b py-2.5 px-4 text-xs no-print ${
+        <div className={`border-b py-2.5 px-3 sm:px-4 text-xs no-print ${
           isDark 
             ? 'bg-amber-950/40 border-amber-800/40 text-amber-200' 
             : 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
         }`}>
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-center sm:text-left">
               <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
               <span>
                 Você está em <strong>Modo Demonstração</strong>. Para salvar seus dados em uma conta individual protegida, conecte-se com sua conta Google.
@@ -677,7 +688,7 @@ export default function App() {
       )}
 
       {/* Conteúdo Principal */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 md:pb-8 space-y-5 sm:space-y-6">
         
         {/* Cabeçalho de Impressão Otimizado para Relatório PDF */}
         <div className="hidden print-only mb-6 border-b border-slate-300 pb-4">
@@ -716,62 +727,89 @@ export default function App() {
         </div>
 
         {/* Barra de Navegação de Visualizações: Dashboard Completo | Faturas de Cartão | Lançamentos */}
-        <div className="no-print flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
-          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold">
+        <div className="no-print flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-3">
+          <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold overflow-x-auto no-scrollbar scroll-smooth shrink-0 max-w-full">
             <button
               onClick={() => setActiveViewTab('dashboard')}
-              className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                 activeViewTab === 'dashboard'
                   ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Dashboard Completo</span>
+              <LayoutDashboard className="w-3.5 h-3.5 shrink-0" />
+              <span>Dashboard</span>
+              <span className="hidden sm:inline">Completo</span>
             </button>
 
             <button
               onClick={() => setActiveViewTab('cartoes')}
-              className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                 activeViewTab === 'cartoes'
                   ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <CreditCard className="w-3.5 h-3.5" />
-              <span>Faturas dos Cartões</span>
+              <CreditCard className="w-3.5 h-3.5 shrink-0" />
+              <span>Cartões</span>
+              <span className="hidden sm:inline">& Faturas</span>
             </button>
 
             <button
               onClick={() => setActiveViewTab('lancamentos')}
-              className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                 activeViewTab === 'lancamentos'
                   ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <ReceiptText className="w-3.5 h-3.5" />
-              <span>Lançamentos & Extrato</span>
+              <ReceiptText className="w-3.5 h-3.5 shrink-0" />
+              <span>Lançamentos</span>
+              <span className="hidden sm:inline">& Extrato</span>
             </button>
 
             <button
               onClick={() => setActiveViewTab('todos')}
-              className={`hidden md:flex px-3.5 py-1.5 rounded-lg transition-all items-center gap-2 cursor-pointer ${
+              className={`hidden lg:flex px-3.5 py-1.5 rounded-lg transition-all items-center gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                 activeViewTab === 'todos'
                   ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Layers className="w-3.5 h-3.5" />
+              <Layers className="w-3.5 h-3.5 shrink-0" />
               <span>Visão Geral</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500 hidden sm:inline">Competência:</span>
+          <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
+            <span className="text-slate-500 text-[11px] sm:text-xs">Competência:</span>
             <span className="font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border px-2.5 py-1 rounded-lg">
               {currentMonth}
             </span>
+
+            {/* Botão de Lançar por Chat 100% Grátis */}
+            <button
+              onClick={() => setIsChatModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 font-bold rounded-lg shadow-xs transition-colors cursor-pointer text-xs"
+              title="Lançamento Inteligente por Chat (100% Grátis)"
+            >
+              <MessageSquareQuote className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Chat</span>
+              <span className="hidden sm:inline">Grátis</span>
+            </button>
+
+            {/* Botão de Lançamento no topo (Rápido em todas as telas) */}
+            <button
+              onClick={() => {
+                setEditingTx(null);
+                setIsTxModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow-xs transition-colors cursor-pointer text-xs"
+              title="Novo Lançamento Financeiro"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Lançamento</span>
+            </button>
           </div>
         </div>
 
@@ -848,6 +886,7 @@ export default function App() {
                 setIsTxModalOpen(true);
               }}
               onOpenInstallmentModal={() => setIsInstallmentModalOpen(true)}
+              onOpenChat={() => setIsChatModalOpen(true)}
               onClearFilters={handleClearFilters}
               isDark={isDark}
             />
@@ -913,6 +952,135 @@ export default function App() {
         isDark={isDark}
         onToggleTheme={handleToggleTheme}
       />
+
+      {/* Modal de Lançamento por Chat 100% Grátis */}
+      <ChatTransactionModal
+        isOpen={isChatModalOpen}
+        onClose={() => setIsChatModalOpen(false)}
+        onLaunchTransaction={handleSaveTransaction}
+        isDark={isDark}
+      />
+
+      {/* Botões Flutuantes (FABs) para Desktop / Telas Maiores */}
+      <div className="fixed bottom-6 right-6 z-40 no-print hidden sm:flex items-center gap-3">
+        {/* Botão FAB do Chat Grátis */}
+        <button
+          onClick={() => setIsChatModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-3 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-emerald-400 border border-emerald-500/40 active:scale-95 font-bold text-sm rounded-full shadow-lg hover:shadow-xl transition-all cursor-pointer group"
+          title="Lançamento Inteligente por Chat (100% Grátis)"
+          aria-label="Lançar por Chat"
+        >
+          <Bot className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+          <span>Chat Grátis</span>
+        </button>
+
+        {/* Botão FAB Novo Lançamento Tradicional */}
+        <button
+          onClick={() => {
+            setEditingTx(null);
+            setIsTxModalOpen(true);
+          }}
+          className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-sm rounded-full shadow-lg shadow-emerald-600/30 hover:shadow-xl transition-all cursor-pointer group"
+          title="Fazer Novo Lançamento Financeiro"
+          aria-label="Novo Lançamento"
+        >
+          <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-200" />
+          <span>Novo Lançamento</span>
+        </button>
+      </div>
+
+      {/* Botão Flutuante do Chat para Smartphones (Acesso Rápido com Um Toque) */}
+      <div className="sm:hidden fixed bottom-20 right-4 z-40 no-print">
+        <button
+          onClick={() => setIsChatModalOpen(true)}
+          className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-900/95 dark:bg-slate-800/95 text-emerald-400 border border-emerald-500/50 active:scale-90 font-bold text-xs rounded-full shadow-xl shadow-black/30 backdrop-blur-md transition-all cursor-pointer"
+          title="Lançar por Chat 100% Grátis"
+          aria-label="Chat de Lançamento"
+        >
+          <Bot className="w-4 h-4 text-emerald-400" />
+          <span>Chat Grátis</span>
+        </button>
+      </div>
+
+      {/* Barra de Navegação Inferior Nativa para Smartphones (Mobile Bottom Bar) */}
+      <nav 
+        aria-label="Navegação mobile"
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-30 no-print border-t backdrop-blur-lg px-2 py-1.5 transition-colors ${
+          isDark 
+            ? 'bg-slate-900/95 border-slate-800 text-slate-400' 
+            : 'bg-white/95 border-slate-200 text-slate-500 shadow-lg'
+        }`}
+      >
+        <div className="max-w-md mx-auto grid grid-cols-5 items-center text-center">
+          
+          {/* Aba Dashboard */}
+          <button
+            onClick={() => setActiveViewTab('dashboard')}
+            className={`flex flex-col items-center justify-center py-1 transition-colors cursor-pointer ${
+              activeViewTab === 'dashboard'
+                ? 'text-emerald-600 dark:text-emerald-400 font-bold'
+                : 'hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] leading-tight">Início</span>
+          </button>
+
+          {/* Aba Cartões */}
+          <button
+            onClick={() => setActiveViewTab('cartoes')}
+            className={`flex flex-col items-center justify-center py-1 transition-colors cursor-pointer ${
+              activeViewTab === 'cartoes'
+                ? 'text-amber-600 dark:text-amber-400 font-bold'
+                : 'hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <CreditCard className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] leading-tight">Cartões</span>
+          </button>
+
+          {/* BOTÃO PRINCIPAL DE LANÇAMENTO (Centro de Destaque para Smartphone) */}
+          <div className="flex flex-col items-center justify-center">
+            <button
+              onClick={() => {
+                setEditingTx(null);
+                setIsTxModalOpen(true);
+              }}
+              className="w-12 h-12 -mt-5 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 active:scale-90 text-white shadow-lg shadow-emerald-600/40 ring-4 ring-slate-50 dark:ring-slate-950 flex items-center justify-center transition-all cursor-pointer"
+              title="Lançar Nova Transação"
+              aria-label="Lançar Transação"
+            >
+              <Plus className="w-6 h-6 stroke-[2.5]" />
+            </button>
+            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+              Lançar
+            </span>
+          </div>
+
+          {/* Aba Extrato / Lançamentos */}
+          <button
+            onClick={() => setActiveViewTab('lancamentos')}
+            className={`flex flex-col items-center justify-center py-1 transition-colors cursor-pointer ${
+              activeViewTab === 'lancamentos'
+                ? 'text-blue-600 dark:text-blue-400 font-bold'
+                : 'hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <ReceiptText className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] leading-tight">Extrato</span>
+          </button>
+
+          {/* Aba Ajustes / Configurações */}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="flex flex-col items-center justify-center py-1 transition-colors cursor-pointer hover:text-slate-900 dark:hover:text-white"
+          >
+            <Settings className="w-4 h-4 mb-0.5 text-slate-500" />
+            <span className="text-[10px] leading-tight">Ajustes</span>
+          </button>
+
+        </div>
+      </nav>
     </div>
   );
 }

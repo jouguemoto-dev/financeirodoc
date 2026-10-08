@@ -209,6 +209,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                       <input
                         type="text"
                         autoFocus
+                        inputMode="decimal"
                         value={amountInput}
                         onChange={(e) => setAmountInput(e.target.value)}
                         placeholder="0,00"

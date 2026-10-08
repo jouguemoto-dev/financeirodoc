@@ -83,16 +83,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-emerald-500';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs no-print">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs no-print">
       <div 
-        className={`border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden transition-colors ${
+        className={`border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden max-h-[92vh] flex flex-col transition-colors ${
           isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
         }`}
         role="dialog"
         aria-modal="true"
       >
         {/* Header do Modal */}
-        <div className={`flex items-center justify-between px-6 py-4 border-b ${
+        <div className={`flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b shrink-0 ${
           isDark ? 'border-slate-800 bg-slate-950/50' : 'border-slate-100 bg-slate-50/80'
         }`}>
           <h3 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
@@ -100,16 +100,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           </h3>
           <button
             onClick={onClose}
-            className={`p-1 rounded-lg transition-colors cursor-pointer ${
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
             }`}
+            aria-label="Fechar"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Formulário */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 overflow-y-auto">
           <div>
             <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               Descrição
@@ -124,7 +125,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                 Valor (R$)
@@ -133,6 +134,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 type="number"
                 step="0.01"
                 min="0.01"
+                inputMode="decimal"
                 required
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}

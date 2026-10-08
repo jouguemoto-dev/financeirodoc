@@ -9,7 +9,8 @@ import {
   CheckCircle2, 
   Clock, 
   RotateCcw,
-  Check
+  Check,
+  MessageSquareQuote
 } from 'lucide-react';
 import { Transaction, FilterType, FilterStatus } from '../types';
 import { formatMoney } from '../utils/formatters';
@@ -35,6 +36,7 @@ interface TransactionTableProps {
   onBulkDelete: () => void;
   onOpenTransactionModal: () => void;
   onOpenInstallmentModal: () => void;
+  onOpenChat?: () => void;
   onClearFilters: () => void;
   isDark?: boolean;
 }
@@ -60,6 +62,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
   onBulkDelete,
   onOpenTransactionModal,
   onOpenInstallmentModal,
+  onOpenChat,
   onClearFilters,
   isDark = false,
 }) => {
@@ -86,20 +89,38 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 no-print">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 no-print w-full sm:w-auto">
+          {onOpenChat && (
+            <button
+              onClick={onOpenChat}
+              className={`flex-1 sm:flex-initial justify-center inline-flex items-center gap-1.5 px-3 py-2.5 sm:py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer shadow-xs ${
+                isDark
+                  ? 'bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border-emerald-500/40'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+              }`}
+              title="Lançamento Rápido por Chat Grátis"
+            >
+              <MessageSquareQuote className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Lançar por Chat</span>
+              <span className="px-1 py-0.2 text-[9px] font-black rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                Grátis
+              </span>
+            </button>
+          )}
+
           <button
             onClick={onOpenInstallmentModal}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 rounded-lg shadow-xs transition-colors cursor-pointer"
+            className="flex-1 sm:flex-initial justify-center inline-flex items-center gap-1.5 px-3.5 py-2.5 sm:py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 rounded-lg shadow-xs transition-colors cursor-pointer"
           >
-            <CreditCard className="w-4 h-4" />
+            <CreditCard className="w-4 h-4 shrink-0" />
             <span>+ Compra Parcelada</span>
           </button>
 
           <button
             onClick={onOpenTransactionModal}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-xs transition-colors cursor-pointer"
+            className="flex-1 sm:flex-initial justify-center inline-flex items-center gap-1.5 px-3.5 py-2.5 sm:py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-xs transition-colors cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 shrink-0" />
             <span>+ Novo Lançamento</span>
           </button>
         </div>
@@ -233,8 +254,159 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
         </div>
       )}
 
-      {/* Tabela de Lançamentos */}
-      <div className={`overflow-x-auto rounded-lg border ${
+      {/* Versão Otimizada para Smartphone / Telas Mobile */}
+      <div className="md:hidden space-y-2.5 no-print">
+        {transactions.length === 0 ? (
+          <div className={`p-8 text-center rounded-xl border ${
+            isDark ? 'border-slate-800 bg-slate-900/40 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-600'
+          }`}>
+            <Filter className="w-6 h-6 mx-auto mb-2 text-slate-400" />
+            <p className="font-semibold text-xs">
+              {search || typeFilter !== 'ALL' || statusFilter !== 'ALL' || categoryFilter !== 'ALL'
+                ? 'Nenhum lançamento encontrado para os filtros.'
+                : 'Nenhum lançamento cadastrado.'}
+            </p>
+            <button
+              onClick={onOpenTransactionModal}
+              className="mt-3 px-3.5 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Novo Lançamento</span>
+            </button>
+          </div>
+        ) : (
+          transactions.map((t) => {
+            const isSelected = selectedIds.has(t.id);
+            const isIncome = t.type === 'INCOME';
+
+            return (
+              <div
+                key={`mobile-${t.id}`}
+                className={`p-3.5 rounded-xl border transition-all ${
+                  isSelected
+                    ? (isDark ? 'bg-slate-800/80 border-emerald-500/50' : 'bg-emerald-50/70 border-emerald-300')
+                    : (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200/90 shadow-2xs')
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => onToggleSelect(t.id, e.target.checked)}
+                      className="mt-1 rounded border-slate-300 text-emerald-600 focus:ring-0 cursor-pointer"
+                      title="Selecionar"
+                    />
+                    <div className="min-w-0">
+                      <span className={`font-semibold text-xs leading-snug block truncate ${
+                        isDark ? 'text-slate-100' : 'text-slate-900'
+                      }`}>
+                        {t.description}
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                          isIncome
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400'
+                            : t.type === 'CREDIT'
+                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400'
+                            : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400'
+                        }`}>
+                          {t.category}
+                        </span>
+                        {t.installmentInfo && (
+                          <span className={`text-[10px] font-mono px-1 py-0.2 rounded border ${
+                            isDark 
+                              ? 'bg-amber-950/60 text-amber-300 border-amber-800/50' 
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}>
+                            {t.installmentInfo.current}/{t.installmentInfo.total}
+                          </span>
+                        )}
+                        {t.cardName && t.type === 'CREDIT' && (
+                          <span className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            · {t.cardName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className={`font-mono font-bold text-sm block tabular-nums ${
+                      isIncome 
+                        ? (isDark ? 'text-emerald-400' : 'text-emerald-600') 
+                        : (isDark ? 'text-rose-400' : 'text-rose-600')
+                    }`}>
+                      {isIncome ? '+' : '-'}{formatMoney(t.amount)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Linha Inferior com Botão de Status e Ações */}
+                <div className={`mt-3 pt-2.5 border-t flex items-center justify-between gap-2 ${
+                  isDark ? 'border-slate-800/80' : 'border-slate-100'
+                }`}>
+                  <button
+                    onClick={() => onToggleConsolidated(t.id)}
+                    type="button"
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border ${
+                      t.consolidated
+                        ? (isDark 
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-200')
+                        : (isDark 
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' 
+                            : 'bg-amber-50 text-amber-800 border-amber-200')
+                    }`}
+                  >
+                    {t.consolidated ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Pago / Consolidado</span>
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Pendente</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => onEditTransaction(t)}
+                      className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                        isDark 
+                          ? 'text-slate-400 hover:text-white hover:bg-slate-800' 
+                          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                      }`}
+                      title="Editar"
+                      aria-label="Editar"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => onDeleteTransaction(t.id)}
+                      className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                        isDark 
+                          ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800' 
+                          : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50'
+                      }`}
+                      title="Excluir"
+                      aria-label="Excluir"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Tabela de Lançamentos (Visão Desktop e Tablet) */}
+      <div className={`hidden md:block overflow-x-auto rounded-lg border ${
         isDark ? 'border-slate-800/80' : 'border-slate-200'
       }`}>
         <table className={`w-full text-left text-xs ${

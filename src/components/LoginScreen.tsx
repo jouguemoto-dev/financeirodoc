@@ -25,17 +25,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 }) => {
   const [loadingLogin, setLoadingLogin] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isDomainError, setIsDomainError] = useState(false);
 
   const handleGoogleClick = async () => {
     try {
       setLoadingLogin(true);
       setErrorMessage(null);
+      setIsDomainError(false);
       await onLoginGoogle();
     } catch (err: any) {
       console.error('Erro no login:', err);
-      setErrorMessage(
-        'Não foi possível concluir o login com o Google. Se estiver usando bloqueador de pop-ups, permita pop-ups para este site.'
-      );
+      const errCode = err?.code || '';
+      const errMsg = err?.message || '';
+
+      if (errCode === 'auth/unauthorized-domain' || errMsg.includes('unauthorized-domain')) {
+        setIsDomainError(true);
+        setErrorMessage(
+          'Domínio não autorizado no Firebase Auth: O domínio atual precisa estar na lista de Domínios Autorizados do Firebase Console para que o login com Google funcione nele.'
+        );
+      } else if (errCode === 'auth/popup-closed-by-user') {
+        setErrorMessage('A janela de login com o Google foi fechada antes da confirmação.');
+      } else if (errCode === 'auth/popup-blocked') {
+        setErrorMessage('A janela de pop-up do Google foi bloqueada pelo navegador. Permita pop-ups para este site.');
+      } else {
+        setErrorMessage(
+          'Não foi possível concluir o login com o Google. Se estiver usando bloqueador de pop-ups, permita pop-ups para este site ou tente novamente.'
+        );
+      }
     } finally {
       setLoadingLogin(false);
     }
@@ -84,8 +100,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
 
           {errorMessage && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
-              {errorMessage}
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-2">
+              <p className="font-semibold">{errorMessage}</p>
+              {isDomainError && (
+                <div className="bg-white/80 p-2.5 rounded-lg border border-rose-200 text-[11px] text-slate-700 space-y-1">
+                  <p><strong>Como autorizar no Firebase Console:</strong></p>
+                  <ol className="list-decimal pl-4 space-y-0.5">
+                    <li>Acesse o <strong>Firebase Console</strong> do seu projeto (<code className="font-mono bg-slate-100 px-1 rounded text-[10px]">gen-lang-client-0329505371</code>).</li>
+                    <li>Vá em <strong>Authentication &gt; Settings &gt; Authorized domains</strong> (Domínios autorizados).</li>
+                    <li>Clique em <strong>Add domain</strong> e adicione: <code className="font-mono font-bold bg-slate-100 px-1 rounded text-[10px]">financeirodoc.vercel.app</code></li>
+                  </ol>
+                </div>
+              )}
             </div>
           )}
 

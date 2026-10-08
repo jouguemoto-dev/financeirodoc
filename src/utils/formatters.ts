@@ -9,6 +9,8 @@ export const formatMoney = (val: number): string => {
   });
 };
 
+export const formatCurrency = formatMoney;
+
 export const exportTransactionsToCSV = (transactions: Transaction[], filename = 'controle_financeiro_novembro_2026.csv') => {
   const headers = ['ID', 'Descrição', 'Valor (R$)', 'Tipo', 'Categoria', 'Status', 'Cartão'];
   
