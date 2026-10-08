@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "User's display name",
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address",
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "User's profile photo URL",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Update timestamp"
+        }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Personal finance income, expense or credit card transaction",
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Description of the transaction",
+          "maxLength": 150,
+          "minLength": 1
+        },
+        "amount": {
+          "type": "number",
+          "description": "Transaction monetary amount in BRL"
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of transaction",
+          "enum": ["INCOME", "EXPENSE", "CREDIT"]
+        },
+        "category": {
+          "type": "string",
+          "description": "Category name",
+          "maxLength": 60
+        },
+        "consolidated": {
+          "type": "boolean",
+          "description": "Whether the transaction has been paid / consolidated"
+        },
+        "cardName": {
+          "type": "string",
+          "description": "Credit card name if applicable",
+          "maxLength": 60
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["description", "amount", "type", "category", "consolidated", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "User financial transactions"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Controle Financeiro Pessoal",
+  "description": "Painel de controle financeiro pessoal com gestão de receitas, despesas fixas, faturas de cartões de crédito, parcelamentos e relatórios.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
