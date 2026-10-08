@@ -4,17 +4,22 @@ import { Header } from './components/Header';
 import { LoginScreen } from './components/LoginScreen';
 import { MetricCards } from './components/MetricCards';
 import { CreditCardsGrid } from './components/CreditCardsGrid';
+import { AccountsGrid } from './components/AccountsGrid';
+import { CategoriesGrid } from './components/CategoriesGrid';
 import { FinancialCharts } from './components/FinancialCharts';
 import { BudgetHealthAlert } from './components/BudgetHealthAlert';
 import { TransactionTable } from './components/TransactionTable';
 import { TransactionModal } from './components/TransactionModal';
 import { InstallmentModal } from './components/InstallmentModal';
+import { CardModal } from './components/CardModal';
+import { AccountModal } from './components/AccountModal';
+import { CategoryModal } from './components/CategoryModal';
 import { SettingsModal } from './components/SettingsModal';
 import { InvoiceModal } from './components/InvoiceModal';
 import { DashboardComplete } from './components/DashboardComplete';
 import { ChatTransactionModal } from './components/ChatTransactionModal';
-import { Transaction, FilterType, FilterStatus } from './types';
-import { INITIAL_TRANSACTIONS } from './data/initialData';
+import { Transaction, FilterType, FilterStatus, CreditCardItem, AccountItem, CategoryItem } from './types';
+import { INITIAL_TRANSACTIONS, INITIAL_CREDIT_CARDS, INITIAL_ACCOUNTS, INITIAL_CATEGORIES } from './data/initialData';
 import { exportTransactionsToCSV, formatMoney } from './utils/formatters';
 import { auth, googleProvider, testConnection } from './firebase';
 import { 
@@ -26,13 +31,27 @@ import {
   bulkDeleteTransactionsFromFirestore,
   seedInitialTransactionsIfEmpty,
   resetFirestoreTransactions,
-  clearAllFirestoreTransactions
+  clearAllFirestoreTransactions,
+  subscribeToCards,
+  saveCardToFirestore,
+  deleteCardFromFirestore,
+  seedInitialCardsIfEmpty,
+  subscribeToAccounts,
+  saveAccountToFirestore,
+  deleteAccountFromFirestore,
+  seedInitialAccountsIfEmpty,
+  subscribeToCategories,
+  saveCategoryToFirestore,
+  deleteCategoryFromFirestore,
+  seedInitialCategoriesIfEmpty
 } from './services/firestoreService';
 import { 
   ShieldCheck, 
   LogIn, 
   LayoutDashboard, 
   CreditCard, 
+  Landmark,
+  Tag,
   ReceiptText, 
   Layers,
   Sparkles,
@@ -46,6 +65,9 @@ const STORAGE_KEY = 'finances_2026_v1';
 const MONTH_STORAGE_KEY = 'finances_month_v1';
 const LIMIT_STORAGE_KEY = 'finances_limit_v1';
 const THEME_STORAGE_KEY = 'finances_theme_v1';
+const CARDS_STORAGE_KEY = 'finances_cards_v1';
+const ACCOUNTS_STORAGE_KEY = 'finances_accounts_v1';
+const CATEGORIES_STORAGE_KEY = 'finances_categories_v1';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -91,6 +113,7 @@ export default function App() {
     }
   });
 
+  // Estado das Transações
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -103,24 +126,75 @@ export default function App() {
     return INITIAL_TRANSACTIONS;
   });
 
+  // Estado dos Cartões de Crédito
+  const [cards, setCards] = useState<CreditCardItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(CARDS_STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // Fallback
+    }
+    return INITIAL_CREDIT_CARDS;
+  });
+
+  // Estado das Contas Bancárias & Carteiras
+  const [accounts, setAccounts] = useState<AccountItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // Fallback
+    }
+    return INITIAL_ACCOUNTS;
+  });
+
+  // Estado das Categorias
+  const [categories, setCategories] = useState<CategoryItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // Fallback
+    }
+    return INITIAL_CATEGORIES;
+  });
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<FilterType>('ALL');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
 
-  // Controle de Visualização do Painel (Dashboard / Cartões / Lançamentos / Todos)
-  const [activeViewTab, setActiveViewTab] = useState<'dashboard' | 'cartoes' | 'lancamentos' | 'todos'>('dashboard');
+  // Controle de Visualização do Painel (Dashboard / Contas / Cartões / Categorias / Lançamentos / Todos)
+  const [activeViewTab, setActiveViewTab] = useState<'dashboard' | 'contas' | 'cartoes' | 'categorias' | 'lancamentos' | 'todos'>('dashboard');
 
   // Modals state
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [selectedCardForInstallment, setSelectedCardForInstallment] = useState<string>('Cartão Neon');
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
 
-  // Modal da Fatura de Cartão (Clicar nos cartões para abrir fatura, pagar e alterar valor)
+  // Modais de Criação e Edição: Cartão, Conta, Categoria
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<CreditCardItem | null>(null);
+
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<AccountItem | null>(null);
+
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
+
+  // Modal da Fatura de Cartão
   const [selectedInvoiceCard, setSelectedInvoiceCard] = useState<Transaction | null>(null);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
 
@@ -129,18 +203,29 @@ export default function App() {
     testConnection();
   }, []);
 
-  // Monitorar autenticação individual
+  // Monitorar autenticação individual e Firestore listeners
   useEffect(() => {
+    let unsubs: (() => void)[] = [];
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setAuthChecked(true);
+
+      // Limpar listeners antigos se houver
+      unsubs.forEach(un => un());
+      unsubs = [];
 
       if (currentUser) {
         setIsSyncing(true);
         try {
           const profile = await syncUserProfile(currentUser);
           if (profile.isFirstTime && !profile.isZeroed) {
-            await seedInitialTransactionsIfEmpty(currentUser.uid, INITIAL_TRANSACTIONS);
+            await Promise.all([
+              seedInitialTransactionsIfEmpty(currentUser.uid, INITIAL_TRANSACTIONS),
+              seedInitialCardsIfEmpty(currentUser.uid, INITIAL_CREDIT_CARDS),
+              seedInitialAccountsIfEmpty(currentUser.uid, INITIAL_ACCOUNTS),
+              seedInitialCategoriesIfEmpty(currentUser.uid, INITIAL_CATEGORIES)
+            ]);
           }
         } catch (e) {
           console.error('Erro na sincronização de perfil/seed:', e);
@@ -148,205 +233,208 @@ export default function App() {
           setIsSyncing(false);
         }
 
-        // Inscrição em tempo real na subcoleção individual do cliente
-        const unsubscribeFirestore = subscribeToTransactions(
+        // 1. Listener de Transações
+        const unsubTx = subscribeToTransactions(
           currentUser.uid,
           (liveTransactions) => {
             setTransactions(liveTransactions);
             setIsSyncing(false);
           },
           (error) => {
-            console.error('Erro no listener do Firestore:', error);
+            console.error('Erro no listener de transações:', error);
             setIsSyncing(false);
           }
         );
+        unsubs.push(unsubTx);
 
-        return () => {
-          unsubscribeFirestore();
-        };
+        // 2. Listener de Cartões
+        const unsubCards = subscribeToCards(
+          currentUser.uid,
+          (liveCards) => {
+            if (liveCards.length > 0) {
+              setCards(liveCards);
+            }
+          },
+          (error) => console.error('Erro no listener de cartões:', error)
+        );
+        unsubs.push(unsubCards);
+
+        // 3. Listener de Contas Bancárias
+        const unsubAccounts = subscribeToAccounts(
+          currentUser.uid,
+          (liveAccounts) => {
+            if (liveAccounts.length > 0) {
+              setAccounts(liveAccounts);
+            }
+          },
+          (error) => console.error('Erro no listener de contas:', error)
+        );
+        unsubs.push(unsubAccounts);
+
+        // 4. Listener de Categorias
+        const unsubCategories = subscribeToCategories(
+          currentUser.uid,
+          (liveCategories) => {
+            if (liveCategories.length > 0) {
+              setCategories(liveCategories);
+            }
+          },
+          (error) => console.error('Erro no listener de categorias:', error)
+        );
+        unsubs.push(unsubCategories);
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      unsubs.forEach(un => un());
+    };
   }, []);
 
-  // Salvar no localStorage quando em modo guest ou para cache local
+  // Persistência local (LocalStorage)
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
     } catch (e) {
-      console.error('Falha ao salvar no armazenamento local:', e);
+      console.error('Falha ao salvar transações no localStorage:', e);
     }
   }, [transactions]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CARDS_STORAGE_KEY, JSON.stringify(cards));
+    } catch (e) {
+      console.error('Falha ao salvar cartões no localStorage:', e);
+    }
+  }, [cards]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+    } catch (e) {
+      console.error('Falha ao salvar contas no localStorage:', e);
+    }
+  }, [accounts]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
+    } catch (e) {
+      console.error('Falha ao salvar categorias no localStorage:', e);
+    }
+  }, [categories]);
 
   // Login com Google
   const handleGoogleLogin = async () => {
     try {
+      setIsSyncing(true);
       await signInWithPopup(auth, googleProvider);
-      setIsGuestMode(false);
-    } catch (err) {
-      console.error('Erro ao realizar login Google:', err);
-      throw err;
+    } catch (error: any) {
+      console.error('Erro no login com Google:', error);
+      alert('Falha ao autenticar com Google: ' + (error.message || 'Erro desconhecido'));
+    } finally {
+      setIsSyncing(false);
     }
   };
 
-  // Logout / Trocar de usuário individual
+  // Logout
   const handleLogout = async () => {
     try {
       await signOut(auth);
       setUser(null);
       setIsGuestMode(false);
-      setTransactions([]);
-      try {
-        localStorage.removeItem(STORAGE_KEY);
-      } catch (e) {
-        console.error(e);
-      }
-    } catch (err) {
-      console.error('Erro ao desconectar:', err);
+    } catch (e) {
+      console.error('Erro ao sair:', e);
     }
   };
 
-  // Totais calculados
+  // Cálculos consolidados dos totais
   const totals = useMemo(() => {
-    const income = transactions
-      .filter((t) => t.type === 'INCOME')
-      .reduce((sum, t) => sum + t.amount, 0);
+    let income = 0;
+    let expenses = 0;
+    let creditCards = 0;
 
-    const expenses = transactions
-      .filter((t) => t.type !== 'INCOME')
-      .reduce((sum, t) => sum + t.amount, 0);
+    transactions.forEach((tx) => {
+      if (tx.type === 'INCOME') {
+        income += tx.amount;
+      } else if (tx.type === 'EXPENSE') {
+        expenses += tx.amount;
+      } else if (tx.type === 'CREDIT') {
+        creditCards += tx.amount;
+      }
+    });
 
-    const creditCards = transactions
-      .filter((t) => t.type === 'CREDIT')
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const consolidatedExpenses = transactions
-      .filter((t) => t.type !== 'INCOME' && t.consolidated)
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    const pendingExpenses = transactions
-      .filter((t) => t.type !== 'INCOME' && !t.consolidated)
-      .reduce((sum, t) => sum + t.amount, 0);
+    const totalOutflow = expenses + creditCards;
+    const balance = income - totalOutflow;
 
     return {
       income,
-      expenses,
-      balance: income - expenses,
+      expenses: totalOutflow,
+      expensesOnly: expenses,
       creditCards,
-      consolidatedExpenses,
-      pendingExpenses,
+      balance,
     };
   }, [transactions]);
 
-  // Categorias disponíveis
-  const allCategories = useMemo(() => {
-    const cats = new Set<string>();
-    transactions.forEach((t) => {
-      if (t.category) cats.add(t.category);
-    });
-    return Array.from(cats).sort();
-  }, [transactions]);
-
-  // Transações filtradas
+  // Lançamentos filtrados
   const filteredTransactions = useMemo(() => {
-    const searchLower = search.trim().toLowerCase();
+    return transactions.filter((tx) => {
+      const matchSearch =
+        tx.description.toLowerCase().includes(search.toLowerCase()) ||
+        tx.category.toLowerCase().includes(search.toLowerCase()) ||
+        (tx.cardName && tx.cardName.toLowerCase().includes(search.toLowerCase())) ||
+        (tx.accountName && tx.accountName.toLowerCase().includes(search.toLowerCase()));
 
-    return transactions.filter((t) => {
-      const matchesSearch =
-        !searchLower ||
-        t.description.toLowerCase().includes(searchLower) ||
-        t.category.toLowerCase().includes(searchLower) ||
-        (t.cardName && t.cardName.toLowerCase().includes(searchLower));
-
-      const matchesType = typeFilter === 'ALL' || t.type === typeFilter;
-      const matchesStatus =
+      const matchType = typeFilter === 'ALL' || tx.type === typeFilter;
+      const matchStatus =
         statusFilter === 'ALL' ||
-        (statusFilter === 'CONSOLIDATED' ? t.consolidated : !t.consolidated);
+        (statusFilter === 'CONSOLIDATED' && tx.consolidated) ||
+        (statusFilter === 'PENDING' && !tx.consolidated);
 
-      const matchesCategory =
-        categoryFilter === 'ALL' || t.category === categoryFilter;
+      const matchCategory =
+        categoryFilter === 'ALL' || tx.category === categoryFilter;
 
-      return matchesSearch && matchesType && matchesStatus && matchesCategory;
+      return matchSearch && matchType && matchStatus && matchCategory;
     });
   }, [transactions, search, typeFilter, statusFilter, categoryFilter]);
 
-  // Alternar status consolidado de uma transação
+  // Alternar status consolidado/pendente
   const handleToggleConsolidated = async (id: string) => {
-    const target = transactions.find((t) => t.id === id);
-    if (!target) return;
-    const newStatus = !target.consolidated;
-
+    let updatedTx: Transaction | undefined;
     setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, consolidated: newStatus } : t))
+      prev.map((t) => {
+        if (t.id === id) {
+          updatedTx = { ...t, consolidated: !t.consolidated };
+          return updatedTx;
+        }
+        return t;
+      })
     );
 
-    if (user) {
+    if (user && updatedTx) {
       try {
-        await saveTransactionToFirestore(user.uid, { ...target, consolidated: newStatus });
+        await saveTransactionToFirestore(user.uid, updatedTx);
       } catch (e) {
-        console.error('Erro ao sincronizar com Firestore:', e);
+        console.error('Erro ao sincronizar status:', e);
       }
     }
   };
 
-  // Abrir Fatura do Cartão (Quando o usuário clica no cartão)
-  const handleSelectCardForInvoice = (card: Transaction) => {
-    setSelectedInvoiceCard(card);
-    setIsInvoiceModalOpen(true);
-  };
-
-  // Alterar valor da fatura
-  const handleUpdateInvoiceAmount = async (id: string, newAmount: number) => {
-    const target = transactions.find((t) => t.id === id);
-    if (!target) return;
-    const updated = { ...target, amount: newAmount };
-    
-    setTransactions((prev) => prev.map((t) => (t.id === id ? updated : t)));
-    setSelectedInvoiceCard(updated);
-
-    if (user) {
-      try {
-        await saveTransactionToFirestore(user.uid, updated);
-      } catch (e) {
-        console.error('Erro ao atualizar valor da fatura no Firestore:', e);
-      }
-    }
-  };
-
-  // Alternar pagamento da fatura
-  const handleToggleInvoicePayment = async (id: string) => {
-    const target = transactions.find((t) => t.id === id);
-    if (!target) return;
-    const newStatus = !target.consolidated;
-    
-    setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, consolidated: newStatus } : t))
-    );
-    setSelectedInvoiceCard({ ...target, consolidated: newStatus });
-
-    if (user) {
-      try {
-        await saveTransactionToFirestore(user.uid, { ...target, consolidated: newStatus });
-      } catch (e) {
-        console.error('Erro ao sincronizar pagamento da fatura:', e);
-      }
-    }
-  };
-
-  // Seleção individual
-  const handleToggleSelect = (id: string, checked: boolean) => {
+  // Seleção múltipla
+  const handleToggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };
 
-  // Selecionar todos os visíveis
-  const handleToggleSelectAll = (checked: boolean) => {
-    if (checked) {
+  const handleToggleSelectAll = () => {
+    if (selectedIds.size < filteredTransactions.length) {
       setSelectedIds(new Set(filteredTransactions.map((t) => t.id)));
     } else {
       setSelectedIds(new Set());
@@ -469,12 +557,227 @@ export default function App() {
     }
   };
 
+  /* =========================================================================
+     AÇÕES DE CARTÕES DE CRÉDITO (CRIAR, EDITAR, EXCLUIR)
+     ========================================================================= */
+  const handleSaveCard = async (cardData: {
+    id?: string;
+    name: string;
+    brand: string;
+    limit?: number;
+    closingDay?: number;
+    dueDay?: number;
+    color?: string;
+    border?: string;
+    badge?: string;
+    initialInvoiceAmount?: number;
+  }) => {
+    let targetCard: CreditCardItem;
+
+    if (cardData.id) {
+      targetCard = {
+        id: cardData.id,
+        name: cardData.name,
+        brand: cardData.brand,
+        limit: cardData.limit,
+        closingDay: cardData.closingDay,
+        dueDay: cardData.dueDay,
+        color: cardData.color,
+        border: cardData.border,
+        badge: cardData.badge,
+        updatedAt: new Date().toISOString(),
+      };
+      setCards((prev) => prev.map((c) => (c.id === cardData.id ? targetCard : c)));
+    } else {
+      targetCard = {
+        id: `card_${Date.now()}`,
+        name: cardData.name,
+        brand: cardData.brand,
+        limit: cardData.limit,
+        closingDay: cardData.closingDay,
+        dueDay: cardData.dueDay,
+        color: cardData.color,
+        border: cardData.border,
+        badge: cardData.badge,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setCards((prev) => [...prev, targetCard]);
+
+      // Se o usuário informou fatura inicial para este novo cartão, cria o lançamento
+      if (cardData.initialInvoiceAmount && cardData.initialInvoiceAmount > 0) {
+        const invoiceTx: Transaction = {
+          id: `inv_${Date.now()}`,
+          description: targetCard.name,
+          amount: cardData.initialInvoiceAmount,
+          type: 'CREDIT',
+          category: 'Cartão de Crédito',
+          consolidated: false,
+          cardName: targetCard.name,
+          createdAt: new Date().toISOString(),
+        };
+        setTransactions((prev) => [invoiceTx, ...prev]);
+        if (user) {
+          saveTransactionToFirestore(user.uid, invoiceTx);
+        }
+      }
+    }
+
+    setIsCardModalOpen(false);
+    setEditingCard(null);
+
+    if (user) {
+      try {
+        await saveCardToFirestore(user.uid, targetCard);
+      } catch (e) {
+        console.error('Erro ao salvar cartão no Firestore:', e);
+      }
+    }
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    setCards((prev) => prev.filter((c) => c.id !== cardId));
+    if (user) {
+      try {
+        await deleteCardFromFirestore(user.uid, cardId);
+      } catch (e) {
+        console.error('Erro ao excluir cartão no Firestore:', e);
+      }
+    }
+  };
+
+  /* =========================================================================
+     AÇÕES DE CONTAS BANCÁRIAS E CARTEIRAS (CRIAR, EDITAR, EXCLUIR)
+     ========================================================================= */
+  const handleSaveAccount = async (accountData: {
+    id?: string;
+    name: string;
+    bank?: string;
+    type: any;
+    balance: number;
+    color?: string;
+  }) => {
+    let targetAccount: AccountItem;
+
+    if (accountData.id) {
+      targetAccount = {
+        id: accountData.id,
+        name: accountData.name,
+        bank: accountData.bank,
+        type: accountData.type,
+        balance: accountData.balance,
+        color: accountData.color,
+        updatedAt: new Date().toISOString(),
+      };
+      setAccounts((prev) => prev.map((a) => (a.id === accountData.id ? targetAccount : a)));
+    } else {
+      targetAccount = {
+        id: `acc_${Date.now()}`,
+        name: accountData.name,
+        bank: accountData.bank,
+        type: accountData.type,
+        balance: accountData.balance,
+        color: accountData.color,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setAccounts((prev) => [...prev, targetAccount]);
+    }
+
+    setIsAccountModalOpen(false);
+    setEditingAccount(null);
+
+    if (user) {
+      try {
+        await saveAccountToFirestore(user.uid, targetAccount);
+      } catch (e) {
+        console.error('Erro ao salvar conta no Firestore:', e);
+      }
+    }
+  };
+
+  const handleDeleteAccount = async (accountId: string) => {
+    setAccounts((prev) => prev.filter((a) => a.id !== accountId));
+    if (user) {
+      try {
+        await deleteAccountFromFirestore(user.uid, accountId);
+      } catch (e) {
+        console.error('Erro ao excluir conta no Firestore:', e);
+      }
+    }
+  };
+
+  /* =========================================================================
+     AÇÕES DE CATEGORIAS (CRIAR, EDITAR, EXCLUIR)
+     ========================================================================= */
+  const handleSaveCategory = async (categoryData: {
+    id?: string;
+    name: string;
+    type: any;
+    color?: string;
+    budget?: number;
+  }) => {
+    let targetCategory: CategoryItem;
+
+    if (categoryData.id) {
+      targetCategory = {
+        id: categoryData.id,
+        name: categoryData.name,
+        type: categoryData.type,
+        color: categoryData.color,
+        budget: categoryData.budget,
+        updatedAt: new Date().toISOString(),
+      };
+      setCategories((prev) => prev.map((c) => (c.id === categoryData.id ? targetCategory : c)));
+    } else {
+      targetCategory = {
+        id: `cat_${Date.now()}`,
+        name: categoryData.name,
+        type: categoryData.type,
+        color: categoryData.color,
+        budget: categoryData.budget,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setCategories((prev) => [...prev, targetCategory]);
+    }
+
+    setIsCategoryModalOpen(false);
+    setEditingCategory(null);
+
+    if (user) {
+      try {
+        await saveCategoryToFirestore(user.uid, targetCategory);
+      } catch (e) {
+        console.error('Erro ao salvar categoria no Firestore:', e);
+      }
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+    if (user) {
+      try {
+        await deleteCategoryFromFirestore(user.uid, categoryId);
+      } catch (e) {
+        console.error('Erro ao excluir categoria no Firestore:', e);
+      }
+    }
+  };
+
   // Restaurar dados padrão de Novembro 2026
   const handleResetData = async () => {
     setTransactions(INITIAL_TRANSACTIONS);
+    setCards(INITIAL_CREDIT_CARDS);
+    setAccounts(INITIAL_ACCOUNTS);
+    setCategories(INITIAL_CATEGORIES);
     setCurrentMonth('Novembro 2026');
+
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_TRANSACTIONS));
+      localStorage.setItem(CARDS_STORAGE_KEY, JSON.stringify(INITIAL_CREDIT_CARDS));
+      localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(INITIAL_ACCOUNTS));
+      localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(INITIAL_CATEGORIES));
       localStorage.setItem(MONTH_STORAGE_KEY, 'Novembro 2026');
     } catch (e) {
       console.error(e);
@@ -531,11 +834,14 @@ export default function App() {
   // Exportar Backup JSON
   const handleExportBackupJSON = () => {
     const backupData = {
-      version: '1.0',
+      version: '2.0',
       exportedAt: new Date().toISOString(),
       month: currentMonth,
       spendingLimit,
       transactions,
+      cards,
+      accounts,
+      categories,
     };
     const blob = new Blob([JSON.stringify(backupData, null, 2)], {
       type: 'application/json',
@@ -561,13 +867,16 @@ export default function App() {
 
         if (Array.isArray(parsed.transactions)) {
           setTransactions(parsed.transactions);
+          if (Array.isArray(parsed.cards)) setCards(parsed.cards);
+          if (Array.isArray(parsed.accounts)) setAccounts(parsed.accounts);
+          if (Array.isArray(parsed.categories)) setCategories(parsed.categories);
           if (parsed.month) setCurrentMonth(parsed.month);
           if (parsed.spendingLimit) setSpendingLimit(parsed.spendingLimit);
 
           if (user) {
             await resetFirestoreTransactions(user.uid, parsed.transactions);
           }
-          alert('Backup restaurado com sucesso!');
+          alert('Backup completo restaurado com sucesso!');
         } else {
           alert('O arquivo selecionado não contém uma lista válida de lançamentos.');
         }
@@ -607,6 +916,25 @@ export default function App() {
     setCategoryFilter('ALL');
   };
 
+  // Modal de Fatura
+  const handleSelectCardForInvoice = (card: Transaction) => {
+    setSelectedInvoiceCard(card);
+    setIsInvoiceModalOpen(true);
+  };
+
+  const handleUpdateInvoiceCard = async (updatedCard: Transaction) => {
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === updatedCard.id ? updatedCard : t))
+    );
+    if (user) {
+      try {
+        await saveTransactionToFirestore(user.uid, updatedCard);
+      } catch (e) {
+        console.error('Erro ao atualizar fatura do cartão no Firestore:', e);
+      }
+    }
+  };
+
   // Enquanto aguarda a verificação inicial de autenticação, exibe skeleton suave
   if (!authChecked) {
     return (
@@ -623,7 +951,7 @@ export default function App() {
     );
   }
 
-  // TELA DE LOGIN INDIVIDUAL (Se o usuário não estiver autenticado e não escolheu modo visitante)
+  // TELA DE LOGIN INDIVIDUAL
   if (!user && !isGuestMode) {
     return (
       <LoginScreen
@@ -645,47 +973,23 @@ export default function App() {
         ? 'bg-slate-950 text-slate-100 selection:bg-emerald-500/20 selection:text-emerald-300' 
         : 'bg-slate-50 text-slate-900 selection:bg-emerald-500/20 selection:text-emerald-800'
     }`}>
-      {/* Barra de Navegação Superior (Limpa e elegante, todas as ações transferidas para Configurações) */}
+      {/* Barra de Navegação Superior */}
       <Header
         currentMonth={currentMonth}
         user={user}
         isGuest={isGuestMode}
         isSyncing={isSyncing}
-        isDark={isDark}
         onLogin={handleGoogleLogin}
         onLogout={handleLogout}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenChat={() => setIsChatModalOpen(true)}
         onOpenNewTransaction={() => {
           setEditingTx(null);
           setIsTxModalOpen(true);
         }}
-        onOpenChat={() => setIsChatModalOpen(true)}
+        isDark={isDark}
+        onToggleTheme={handleToggleTheme}
       />
-
-      {/* Banner Informativo em Modo Convidado */}
-      {!user && isGuestMode && (
-        <div className={`border-b py-2.5 px-3 sm:px-4 text-xs no-print ${
-          isDark 
-            ? 'bg-amber-950/40 border-amber-800/40 text-amber-200' 
-            : 'bg-amber-50/90 border-amber-200 text-amber-900 shadow-2xs'
-        }`}>
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-center sm:text-left">
-              <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
-              <span>
-                Você está em <strong>Modo Demonstração</strong>. Para salvar seus dados em uma conta individual protegida, conecte-se com sua conta Google.
-              </span>
-            </div>
-            <button
-              onClick={handleGoogleLogin}
-              className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-medium transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 shadow-2xs"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Fazer Login Individual</span>
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Conteúdo Principal */}
       <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 md:pb-8 space-y-5 sm:space-y-6">
@@ -726,7 +1030,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Barra de Navegação de Visualizações: Dashboard Completo | Faturas de Cartão | Lançamentos */}
+        {/* Barra de Navegação de Visualizações: Dashboard | Contas | Cartões | Categorias | Lançamentos */}
         <div className="no-print flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-3">
           <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold overflow-x-auto no-scrollbar scroll-smooth shrink-0 max-w-full">
             <button
@@ -739,7 +1043,19 @@ export default function App() {
             >
               <LayoutDashboard className="w-3.5 h-3.5 shrink-0" />
               <span>Dashboard</span>
-              <span className="hidden sm:inline">Completo</span>
+            </button>
+
+            <button
+              onClick={() => setActiveViewTab('contas')}
+              className={`px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
+                activeViewTab === 'contas'
+                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Landmark className="w-3.5 h-3.5 shrink-0" />
+              <span>Contas</span>
+              <span className="hidden sm:inline">& Bancos</span>
             </button>
 
             <button
@@ -756,16 +1072,27 @@ export default function App() {
             </button>
 
             <button
+              onClick={() => setActiveViewTab('categorias')}
+              className={`px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
+                activeViewTab === 'categorias'
+                  ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Tag className="w-3.5 h-3.5 shrink-0" />
+              <span>Categorias</span>
+            </button>
+
+            <button
               onClick={() => setActiveViewTab('lancamentos')}
               className={`px-3 py-1.5 sm:px-3.5 sm:py-1.5 rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer shrink-0 whitespace-nowrap ${
                 activeViewTab === 'lancamentos'
-                  ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs font-bold'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <ReceiptText className="w-3.5 h-3.5 shrink-0" />
-              <span>Lançamentos</span>
-              <span className="hidden sm:inline">& Extrato</span>
+              <span>Extrato</span>
             </button>
 
             <button
@@ -781,34 +1108,66 @@ export default function App() {
             </button>
           </div>
 
-          <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
-            <span className="text-slate-500 text-[11px] sm:text-xs">Competência:</span>
-            <span className="font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-900 border px-2.5 py-1 rounded-lg">
-              {currentMonth}
-            </span>
+          {/* Área de Ações Rápidas de Criação: + Lançamento, + Cartão, + Conta, + Categoria */}
+          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-1.5 text-xs">
+            {/* Ações Diretas de Criação Solicitadas pelo Usuário */}
+            <button
+              onClick={() => {
+                setEditingCard(null);
+                setIsCardModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-amber-300 dark:border-amber-800/60 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 font-semibold transition-colors cursor-pointer"
+              title="Ação de Criar Cartão de Crédito"
+            >
+              <CreditCard className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+              <span>+ Cartão</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setEditingAccount(null);
+                setIsAccountModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800/60 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-blue-800 dark:text-blue-300 font-semibold transition-colors cursor-pointer"
+              title="Ação de Criar Conta Bancária ou Carteira"
+            >
+              <Landmark className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+              <span>+ Conta</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setEditingCategory(null);
+                setIsCategoryModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800/60 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 font-semibold transition-colors cursor-pointer"
+              title="Ação de Criar Categoria"
+            >
+              <Tag className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+              <span>+ Categoria</span>
+            </button>
 
             {/* Botão de Lançar por Chat 100% Grátis */}
             <button
               onClick={() => setIsChatModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 font-bold rounded-lg shadow-xs transition-colors cursor-pointer text-xs"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
               title="Lançamento Inteligente por Chat (100% Grátis)"
             >
               <MessageSquareQuote className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span>Chat</span>
-              <span className="hidden sm:inline">Grátis</span>
             </button>
 
-            {/* Botão de Lançamento no topo (Rápido em todas as telas) */}
+            {/* Botão de Lançamento no topo */}
             <button
               onClick={() => {
                 setEditingTx(null);
                 setIsTxModalOpen(true);
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow-xs transition-colors cursor-pointer text-xs"
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
               title="Novo Lançamento Financeiro"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>+ Lançamento</span>
+              <span>Lançar</span>
             </button>
           </div>
         </div>
@@ -842,39 +1201,86 @@ export default function App() {
           </section>
         )}
 
-        {/* 2. SEÇÃO: FATURAS DOS CARTÕES DE CRÉDITO */}
-        {(activeViewTab === 'cartoes' || activeViewTab === 'todos') && (
+        {/* 2. SEÇÃO: CONTAS BANCÁRIAS E CARTEIRAS */}
+        {(activeViewTab === 'contas' || activeViewTab === 'todos') && (
           <section className="space-y-4">
-            <CreditCardsGrid
-              transactions={transactions}
-              onToggleStatus={handleToggleConsolidated}
-              onFilterByCard={handleFilterByCard}
-              onOpenInstallmentForCard={handleOpenInstallmentForCard}
-              onSelectCardForInvoice={handleSelectCardForInvoice}
+            <AccountsGrid
+              accounts={accounts}
+              onOpenNewAccount={() => {
+                setEditingAccount(null);
+                setIsAccountModalOpen(true);
+              }}
+              onEditAccount={(acc) => {
+                setEditingAccount(acc);
+                setIsAccountModalOpen(true);
+              }}
+              onDeleteAccount={handleDeleteAccount}
               isDark={isDark}
             />
           </section>
         )}
 
-        {/* 3. SEÇÃO: GERENCIADOR E TABELA DE LANÇAMENTOS */}
+        {/* 3. SEÇÃO: FATURAS DOS CARTÕES DE CRÉDITO */}
+        {(activeViewTab === 'cartoes' || activeViewTab === 'todos') && (
+          <section className="space-y-4">
+            <CreditCardsGrid
+              transactions={transactions}
+              cards={cards}
+              onToggleStatus={handleToggleConsolidated}
+              onFilterByCard={handleFilterByCard}
+              onOpenInstallmentForCard={handleOpenInstallmentForCard}
+              onSelectCardForInvoice={handleSelectCardForInvoice}
+              onOpenNewCard={() => {
+                setEditingCard(null);
+                setIsCardModalOpen(true);
+              }}
+              onEditCard={(c) => {
+                setEditingCard(c);
+                setIsCardModalOpen(true);
+              }}
+              isDark={isDark}
+            />
+          </section>
+        )}
+
+        {/* 4. SEÇÃO: CATEGORIAS */}
+        {(activeViewTab === 'categorias' || activeViewTab === 'todos') && (
+          <section className="space-y-4">
+            <CategoriesGrid
+              categories={categories}
+              onOpenNewCategory={() => {
+                setEditingCategory(null);
+                setIsCategoryModalOpen(true);
+              }}
+              onEditCategory={(cat) => {
+                setEditingCategory(cat);
+                setIsCategoryModalOpen(true);
+              }}
+              onDeleteCategory={handleDeleteCategory}
+              isDark={isDark}
+            />
+          </section>
+        )}
+
+        {/* 5. SEÇÃO: GERENCIADOR E TABELA DE LANÇAMENTOS */}
         {(activeViewTab === 'lancamentos' || activeViewTab === 'todos') && (
           <section className="space-y-4">
             <TransactionTable
               transactions={filteredTransactions}
-              search={search}
-              onSearchChange={setSearch}
-              typeFilter={typeFilter}
-              onTypeFilterChange={setTypeFilter}
-              statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
-              categoryFilter={categoryFilter}
-              onCategoryFilterChange={setCategoryFilter}
-              allCategories={allCategories}
               selectedIds={selectedIds}
+              search={search}
+              typeFilter={typeFilter}
+              statusFilter={statusFilter}
+              categoryFilter={categoryFilter}
+              allCategories={categories.map((c) => c.name)}
+              onSearchChange={setSearch}
+              onTypeFilterChange={setTypeFilter}
+              onStatusFilterChange={setStatusFilter}
+              onCategoryFilterChange={setCategoryFilter}
               onToggleSelect={handleToggleSelect}
               onToggleSelectAll={handleToggleSelectAll}
               onToggleConsolidated={handleToggleConsolidated}
-              onEditTransaction={(tx) => {
+              onEditTransaction={(tx: Transaction) => {
                 setEditingTx(tx);
                 setIsTxModalOpen(true);
               }}
@@ -892,26 +1298,9 @@ export default function App() {
             />
           </section>
         )}
-
       </main>
 
-      {/* Modal de Fatura do Cartão de Crédito (Pagar e Alterar Valor da Fatura) */}
-      <InvoiceModal
-        isOpen={isInvoiceModalOpen}
-        onClose={() => {
-          setIsInvoiceModalOpen(false);
-          setSelectedInvoiceCard(null);
-        }}
-        cardTransaction={selectedInvoiceCard}
-        allTransactions={transactions}
-        onUpdateInvoiceAmount={handleUpdateInvoiceAmount}
-        onToggleInvoiceStatus={handleToggleInvoicePayment}
-        onAddTransactionToCard={handleOpenInstallmentForCard}
-        currentMonth={currentMonth}
-        isDark={isDark}
-      />
-
-      {/* Modal de Novo/Editar Lançamento */}
+      {/* Modal de Transação / Lançamento */}
       <TransactionModal
         isOpen={isTxModalOpen}
         onClose={() => {
@@ -920,15 +1309,113 @@ export default function App() {
         }}
         onSave={handleSaveTransaction}
         editingTransaction={editingTx}
+        categories={categories}
+        cards={cards}
+        accounts={accounts}
+        onOpenNewCategory={() => {
+          setEditingCategory(null);
+          setIsCategoryModalOpen(true);
+        }}
+        onOpenNewCard={() => {
+          setEditingCard(null);
+          setIsCardModalOpen(true);
+        }}
+        onOpenNewAccount={() => {
+          setEditingAccount(null);
+          setIsAccountModalOpen(true);
+        }}
         isDark={isDark}
       />
 
-      {/* Modal de Compra Parcelada */}
+      {/* Modal de Lançamento de Compra Parcelada */}
       <InstallmentModal
         isOpen={isInstallmentModalOpen}
         onClose={() => setIsInstallmentModalOpen(false)}
         defaultCard={selectedCardForInstallment}
+        cards={cards}
+        categories={categories}
         onSave={handleSaveInstallment}
+        isDark={isDark}
+      />
+
+      {/* Modal da Fatura de Cartão de Crédito */}
+      <InvoiceModal
+        isOpen={isInvoiceModalOpen}
+        onClose={() => {
+          setIsInvoiceModalOpen(false);
+          setSelectedInvoiceCard(null);
+        }}
+        cardTransaction={selectedInvoiceCard}
+        allTransactions={transactions}
+        currentMonth={currentMonth}
+        onUpdateInvoiceAmount={async (id: string, newAmount: number) => {
+          const found = transactions.find((t) => t.id === id);
+          if (found) {
+            await handleSaveTransaction({
+              description: found.description,
+              amount: newAmount,
+              type: found.type,
+              category: found.category,
+              consolidated: found.consolidated,
+              cardName: found.cardName,
+            });
+          }
+        }}
+        onToggleInvoiceStatus={async (id: string) => {
+          await handleToggleConsolidated(id);
+        }}
+        isDark={isDark}
+      />
+
+      {/* Modal de Assistente de Chat 100% Gratuito */}
+      <ChatTransactionModal
+        isOpen={isChatModalOpen}
+        onClose={() => setIsChatModalOpen(false)}
+        onLaunchTransaction={async (newTxData) => {
+          await handleSaveTransaction(newTxData);
+        }}
+        cards={cards}
+        categories={categories}
+        accounts={accounts}
+        isDark={isDark}
+      />
+
+      {/* Modal de Criação / Edição de Cartão de Crédito */}
+      <CardModal
+        isOpen={isCardModalOpen}
+        onClose={() => {
+          setIsCardModalOpen(false);
+          setEditingCard(null);
+        }}
+        onSave={handleSaveCard}
+        onDelete={handleDeleteCard}
+        editingCard={editingCard}
+        isDark={isDark}
+      />
+
+      {/* Modal de Criação / Edição de Conta Bancária */}
+      <AccountModal
+        isOpen={isAccountModalOpen}
+        onClose={() => {
+          setIsAccountModalOpen(false);
+          setEditingAccount(null);
+        }}
+        onSave={handleSaveAccount}
+        onDelete={handleDeleteAccount}
+        editingAccount={editingAccount}
+        isDark={isDark}
+      />
+
+      {/* Modal de Criação / Edição de Categoria */}
+      <CategoryModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => {
+          setIsCategoryModalOpen(false);
+          setEditingCategory(null);
+        }}
+        onSave={handleSaveCategory}
+        onDelete={handleDeleteCategory}
+        editingCategory={editingCategory}
         isDark={isDark}
       />
 
@@ -953,28 +1440,20 @@ export default function App() {
         onToggleTheme={handleToggleTheme}
       />
 
-      {/* Modal de Lançamento por Chat 100% Grátis */}
-      <ChatTransactionModal
-        isOpen={isChatModalOpen}
-        onClose={() => setIsChatModalOpen(false)}
-        onLaunchTransaction={handleSaveTransaction}
-        isDark={isDark}
-      />
-
-      {/* Botões Flutuantes (FABs) para Desktop / Telas Maiores */}
-      <div className="fixed bottom-6 right-6 z-40 no-print hidden sm:flex items-center gap-3">
-        {/* Botão FAB do Chat Grátis */}
+      {/* Botões Flutuantes (FAB) para Desktop e Tablet */}
+      <div className="hidden sm:flex fixed bottom-6 right-6 z-40 items-center gap-3 no-print">
+        {/* Botão de Chat Grátis */}
         <button
           onClick={() => setIsChatModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-3 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-emerald-400 border border-emerald-500/40 active:scale-95 font-bold text-sm rounded-full shadow-lg hover:shadow-xl transition-all cursor-pointer group"
+          className="flex items-center gap-2 px-3.5 py-3 bg-slate-900/90 dark:bg-slate-800/90 hover:bg-slate-900 dark:hover:bg-slate-700 text-emerald-400 border border-emerald-500/40 hover:border-emerald-400 text-sm font-bold rounded-full shadow-lg shadow-black/20 hover:shadow-xl transition-all cursor-pointer group"
           title="Lançamento Inteligente por Chat (100% Grátis)"
-          aria-label="Lançar por Chat"
+          aria-label="Abrir Chat de Lançamento"
         >
-          <Bot className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+          <Bot className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
           <span>Chat Grátis</span>
         </button>
 
-        {/* Botão FAB Novo Lançamento Tradicional */}
+        {/* Botão Principal de Lançamento */}
         <button
           onClick={() => {
             setEditingTx(null);
@@ -1026,17 +1505,17 @@ export default function App() {
             <span className="text-[10px] leading-tight">Início</span>
           </button>
 
-          {/* Aba Cartões */}
+          {/* Aba Contas */}
           <button
-            onClick={() => setActiveViewTab('cartoes')}
+            onClick={() => setActiveViewTab('contas')}
             className={`flex flex-col items-center justify-center py-1 transition-colors cursor-pointer ${
-              activeViewTab === 'cartoes'
-                ? 'text-amber-600 dark:text-amber-400 font-bold'
+              activeViewTab === 'contas'
+                ? 'text-blue-600 dark:text-blue-400 font-bold'
                 : 'hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <CreditCard className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] leading-tight">Cartões</span>
+            <Landmark className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] leading-tight">Contas</span>
           </button>
 
           {/* BOTÃO PRINCIPAL DE LANÇAMENTO (Centro de Destaque para Smartphone) */}
@@ -1057,17 +1536,17 @@ export default function App() {
             </span>
           </div>
 
-          {/* Aba Extrato / Lançamentos */}
+          {/* Aba Cartões */}
           <button
-            onClick={() => setActiveViewTab('lancamentos')}
+            onClick={() => setActiveViewTab('cartoes')}
             className={`flex flex-col items-center justify-center py-1 transition-colors cursor-pointer ${
-              activeViewTab === 'lancamentos'
-                ? 'text-blue-600 dark:text-blue-400 font-bold'
+              activeViewTab === 'cartoes'
+                ? 'text-amber-600 dark:text-amber-400 font-bold'
                 : 'hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <ReceiptText className="w-4 h-4 mb-0.5" />
-            <span className="text-[10px] leading-tight">Extrato</span>
+            <CreditCard className="w-4 h-4 mb-0.5" />
+            <span className="text-[10px] leading-tight">Cartões</span>
           </button>
 
           {/* Aba Ajustes / Configurações */}

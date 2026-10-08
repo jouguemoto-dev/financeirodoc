@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   Search, 
   Filter, 
@@ -10,7 +10,8 @@ import {
   Clock, 
   RotateCcw,
   Check,
-  MessageSquareQuote
+  MessageSquareQuote,
+  AlertTriangle
 } from 'lucide-react';
 import { Transaction, FilterType, FilterStatus } from '../types';
 import { formatMoney } from '../utils/formatters';
@@ -34,6 +35,7 @@ interface TransactionTableProps {
   onDeleteTransaction: (id: string) => void;
   onBulkConsolidated: (consolidated: boolean) => void;
   onBulkDelete: () => void;
+  onRemoveDuplicates?: () => void;
   onOpenTransactionModal: () => void;
   onOpenInstallmentModal: () => void;
   onOpenChat?: () => void;
@@ -60,6 +62,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
   onDeleteTransaction,
   onBulkConsolidated,
   onBulkDelete,
+  onRemoveDuplicates,
   onOpenTransactionModal,
   onOpenInstallmentModal,
   onOpenChat,
@@ -67,6 +70,21 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
   isDark = false,
 }) => {
   const isAllSelected = transactions.length > 0 && transactions.every((t) => selectedIds.has(t.id));
+
+  // Identificar lançamentos repetidos (mesma descrição, valor, tipo e cartão)
+  const duplicateCount = useMemo(() => {
+    const seen = new Set<string>();
+    let count = 0;
+    transactions.forEach((tx) => {
+      const key = `${tx.description.toLowerCase().trim()}_${tx.amount}_${tx.type}_${tx.cardName || ''}`;
+      if (seen.has(key)) {
+        count += 1;
+      } else {
+        seen.add(key);
+      }
+    });
+    return count;
+  }, [transactions]);
 
   const cardBg = isDark
     ? 'bg-slate-900/90 border-slate-800'
@@ -241,16 +259,49 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
 
             <button
               onClick={onBulkDelete}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer border ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer border ${
                 isDark 
                   ? 'bg-rose-500/10 text-rose-300 border-rose-500/30 hover:bg-rose-500/20' 
                   : 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
               }`}
             >
-              <Trash2 className="w-3 h-3" />
-              <span>Excluir</span>
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Excluir Selecionados</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Alerta de Lançamentos Repetidos / Duplicados */}
+      {duplicateCount > 0 && (
+        <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print ${
+          isDark 
+            ? 'bg-amber-950/30 border-amber-800/50 text-amber-200' 
+            : 'bg-amber-50 border-amber-200 text-amber-900 shadow-2xs'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold text-xs block">
+                {duplicateCount} {duplicateCount === 1 ? 'lançamento repetido detectado' : 'lançamentos repetidos detectados'}
+              </span>
+              <span className="text-[11px] text-amber-700/90 dark:text-amber-300/80">
+                Encontramos transações idênticas em seu extrato. Você pode limpar as cópias extras com 1 clique.
+              </span>
+            </div>
+          </div>
+          {onRemoveDuplicates && (
+            <button
+              onClick={onRemoveDuplicates}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-lg bg-amber-600 hover:bg-amber-500 active:scale-95 text-white shadow-xs transition-all cursor-pointer self-start sm:self-auto shrink-0"
+              title="Remover lançamentos repetidos mantendo 1 original"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Limpar Repetidos ({duplicateCount})</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -362,7 +413,7 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                     {t.consolidated ? (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Pago / Consolidado</span>
+                        <span>Pago</span>
                       </>
                     ) : (
                       <>
@@ -372,30 +423,32 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                     )}
                   </button>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => onEditTransaction(t)}
-                      className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border ${
                         isDark 
-                          ? 'text-slate-400 hover:text-white hover:bg-slate-800' 
-                          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                          ? 'text-slate-200 bg-slate-800/90 hover:bg-slate-700 border-slate-700' 
+                          : 'text-slate-700 bg-slate-100 hover:bg-slate-200 border-slate-200'
                       }`}
-                      title="Editar"
-                      aria-label="Editar"
+                      title="Editar lançamento"
+                      aria-label="Editar lançamento"
                     >
-                      <Edit3 className="w-4 h-4" />
+                      <Edit3 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                      <span>Editar</span>
                     </button>
                     <button
                       onClick={() => onDeleteTransaction(t.id)}
-                      className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border ${
                         isDark 
-                          ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800' 
-                          : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50'
+                          ? 'text-rose-300 bg-rose-950/40 hover:bg-rose-900/60 border-rose-800/50' 
+                          : 'text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-200'
                       }`}
-                      title="Excluir"
-                      aria-label="Excluir"
+                      title="Excluir lançamento"
+                      aria-label="Excluir lançamento"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Excluir</span>
                     </button>
                   </div>
                 </div>
@@ -586,25 +639,27 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           onClick={() => onEditTransaction(t)}
-                          className={`p-1.5 rounded transition-colors cursor-pointer ${
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer border ${
                             isDark 
-                              ? 'text-slate-400 hover:text-white hover:bg-slate-800' 
-                              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                              ? 'text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 border-slate-700' 
+                              : 'text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 border-slate-200'
                           }`}
                           title="Editar lançamento"
                         >
-                          <Edit3 className="w-3.5 h-3.5" />
+                          <Edit3 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                          <span className="hidden lg:inline">Editar</span>
                         </button>
                         <button
                           onClick={() => onDeleteTransaction(t.id)}
-                          className={`p-1.5 rounded transition-colors cursor-pointer ${
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer border ${
                             isDark 
-                              ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800' 
-                              : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                              ? 'text-rose-300 hover:text-rose-200 bg-rose-950/40 hover:bg-rose-900/60 border-rose-800/50' 
+                              : 'text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border-rose-200'
                           }`}
                           title="Excluir lançamento"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
+                          <span className="hidden lg:inline">Excluir</span>
                         </button>
                       </div>
                     </td>

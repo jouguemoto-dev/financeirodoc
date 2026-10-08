@@ -22,6 +22,7 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onOpenNewTransaction?: () => void;
   onOpenChat?: () => void;
+  onToggleTheme?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -35,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onOpenNewTransaction,
   onOpenChat,
+  onToggleTheme,
 }) => {
   const userDisplayName = user?.displayName || user?.email?.split('@')[0] || 'Cliente';
   const userPhoto = user?.photoURL;

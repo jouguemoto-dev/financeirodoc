@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, CreditCard, Calculator } from 'lucide-react';
+import { CreditCardItem, CategoryItem } from '../types';
 import { KNOWN_CREDIT_CARDS } from '../data/initialData';
 import { formatMoney } from '../utils/formatters';
 
@@ -7,6 +8,8 @@ interface InstallmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultCard?: string;
+  cards?: CreditCardItem[];
+  categories?: CategoryItem[];
   onSave: (purchase: {
     description: string;
     cardName: string;
@@ -23,11 +26,15 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
   isOpen,
   onClose,
   defaultCard,
+  cards = [],
+  categories = [],
   onSave,
   isDark = false,
 }) => {
+  const cardList = cards.length > 0 ? cards.map(c => c.name) : KNOWN_CREDIT_CARDS.map(c => c.name);
+
   const [description, setDescription] = useState('');
-  const [cardName, setCardName] = useState(defaultCard || 'Cartão Neon');
+  const [cardName, setCardName] = useState(defaultCard || cardList[0] || 'Cartão Neon');
   const [totalAmount, setTotalAmount] = useState<string>('');
   const [installmentsCount, setInstallmentsCount] = useState<number>(10);
   const [category, setCategory] = useState('Compras / Parcelado');
@@ -40,15 +47,15 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (numTotal <= 0 || installmentsCount <= 1) return;
+    if (numTotal <= 0) return;
 
     onSave({
-      description: description.trim(),
+      description: description.trim() || 'Compra Parcelada',
       cardName,
       totalAmount: numTotal,
       installmentsCount,
-      installmentAmount: parseFloat(singleInstallment.toFixed(2)),
-      category: category.trim() || 'Compras / Parcelado',
+      installmentAmount: singleInstallment,
+      category,
       addToCurrentInvoice,
     });
 
@@ -73,11 +80,11 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
           isDark ? 'border-slate-800 bg-slate-950/50' : 'border-slate-100 bg-slate-50/80'
         }`}>
           <div className="flex items-center gap-2">
-            <div className={`p-1.5 rounded-lg ${isDark ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-              <CreditCard className="w-4 h-4" />
+            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+              <Calculator className="w-4 h-4" />
             </div>
             <h3 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              Nova Compra Parcelada
+              Lançar Compra Parcelada
             </h3>
           </div>
           <button
@@ -116,9 +123,9 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
               onChange={(e) => setCardName(e.target.value)}
               className={`w-full border rounded-lg px-3 py-2 text-sm transition-colors focus:outline-none cursor-pointer ${inputClass}`}
             >
-              {KNOWN_CREDIT_CARDS.map((card) => (
-                <option key={card.name} value={card.name}>
-                  {card.name}
+              {cardList.map((cName) => (
+                <option key={cName} value={cName}>
+                  {cName}
                 </option>
               ))}
             </select>
@@ -146,36 +153,29 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
               <label className={`block text-xs font-medium mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                 Nº de Parcelas
               </label>
-              <input
-                type="number"
-                min="2"
-                max="48"
-                inputMode="numeric"
-                required
+              <select
                 value={installmentsCount}
-                onChange={(e) => setInstallmentsCount(parseInt(e.target.value) || 2)}
-                className={`w-full border rounded-lg px-3 py-2 text-sm font-mono transition-colors focus:outline-none ${inputClass}`}
-              />
+                onChange={(e) => setInstallmentsCount(parseInt(e.target.value))}
+                className={`w-full border rounded-lg px-3 py-2 text-sm transition-colors focus:outline-none cursor-pointer ${inputClass}`}
+              >
+                {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24, 36, 48].map((n) => (
+                  <option key={n} value={n}>
+                    {n}x vezes
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
-          {/* Cálculo e Resumo do Parcelamento em Tempo Real */}
-          {numTotal > 0 && installmentsCount > 0 && (
-            <div className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
-              isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-amber-50/70 border-amber-200'
+          {/* Cálculo do valor de cada parcela */}
+          {numTotal > 0 && (
+            <div className={`p-3 rounded-lg border flex items-center justify-between text-xs ${
+              isDark ? 'bg-amber-950/20 border-amber-800/40 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-900'
             }`}>
-              <div className={`flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-amber-800'}`}>
-                <Calculator className="w-4 h-4 text-amber-600" />
-                <span>Valor de cada parcela:</span>
-              </div>
-              <div className="text-right">
-                <span className="font-mono font-bold text-amber-600 text-sm tabular-nums">
-                  {installmentsCount}x de {formatMoney(singleInstallment)}
-                </span>
-                <span className={`block text-[10px] ${isDark ? 'text-slate-500' : 'text-amber-700/80'}`}>
-                  Total: {formatMoney(numTotal)}
-                </span>
-              </div>
+              <span className="font-medium">Valor por Parcela:</span>
+              <span className="font-mono text-sm font-bold">
+                {installmentsCount}x de {formatMoney(singleInstallment)}
+              </span>
             </div>
           )}
 
@@ -185,9 +185,9 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
             </label>
             <input
               type="text"
-              required
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              placeholder="Ex: Compras, Eletrônicos, Viagem..."
               className={`w-full border rounded-lg px-3 py-2 text-sm transition-colors focus:outline-none ${inputClass}`}
             />
           </div>
@@ -201,7 +201,7 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
                 className="rounded border-slate-300 text-amber-600 focus:ring-0 cursor-pointer"
               />
               <span className={`text-xs ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                Adicionar 1ª parcela à fatura atual deste mês (+{formatMoney(singleInstallment)})
+                Incluir 1ª parcela ({formatMoney(singleInstallment)}) na fatura deste mês
               </span>
             </label>
           </div>
@@ -221,9 +221,9 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 rounded-lg transition-colors shadow-xs cursor-pointer"
+              className="px-4 py-2 text-xs font-semibold text-slate-950 bg-amber-500 hover:bg-amber-400 rounded-lg transition-colors shadow-xs cursor-pointer"
             >
-              Gerar {installmentsCount} Parcelas
+              Confirmar Parcelamento
             </button>
           </div>
         </form>

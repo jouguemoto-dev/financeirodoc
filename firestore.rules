@@ -36,6 +36,27 @@ service cloud.firestore {
         allow create, update: if isOwner(userId) && isValidId(transactionId);
         allow delete: if isOwner(userId) && isValidId(transactionId);
       }
+
+      // Cards subcollection privada de cada cliente
+      match /cards/{cardId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(cardId);
+        allow delete: if isOwner(userId) && isValidId(cardId);
+      }
+
+      // Accounts subcollection privada de cada cliente
+      match /accounts/{accountId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(accountId);
+        allow delete: if isOwner(userId) && isValidId(accountId);
+      }
+
+      // Categories subcollection privada de cada cliente
+      match /categories/{categoryId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(categoryId);
+        allow delete: if isOwner(userId) && isValidId(categoryId);
+      }
     }
   }
 }

@@ -1,4 +1,4 @@
-import { Transaction, TransactionType } from '../types';
+import { Transaction, TransactionType, CreditCardItem, CategoryItem, AccountItem } from '../types';
 import { KNOWN_CREDIT_CARDS, COMMON_CATEGORIES } from '../data/initialData';
 
 export interface ParsedTransactionResult {
@@ -9,6 +9,7 @@ export interface ParsedTransactionResult {
   type: TransactionType;
   category: string;
   cardName?: string;
+  accountName?: string;
   consolidated: boolean;
   date?: string;
   explanation: string;
@@ -50,13 +51,13 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
     'dizimo', 'dízimo', 'oferta', 'doacao', 'doação', 'igreja', 'caridade'
   ],
   'Telefonia': [
-    'celular', 'recarga', 'tim', 'vivo', 'claro', 'oi'
+    'celular', 'recarga', 'claro', 'vivo', 'tim', 'oi', 'plano celular', 'telefone'
   ],
   'Vestuário': [
-    'roupa', 'camisa', 'tenis', 'tênis', 'sapato', 'calca', 'calça', 'loja', 'vestido'
+    'roupa', 'camisa', 'tenis', 'tênis', 'sapato', 'calca', 'calça', 'vestido', 'renner', 'zara', 'riachuelo', 'c&a'
   ],
   'Investimentos': [
-    'investimento', 'cdb', 'selic', 'acoes', 'ações', 'fundo', 'poupanca', 'poupança', 'cripto'
+    'cdb', 'tesouro', 'acoes', 'ações', 'fundos', 'fii', 'cripto', 'bitcoin', 'poupanca', 'poupança'
   ],
   'Renda': [
     'salario', 'salário', 'ordenado', 'proventos', 'remuneracao', 'remuneração', 'adiantamento'
@@ -80,7 +81,12 @@ function normalizeText(text: string): string {
  * o valor, tipo, descrição, categoria e cartão de crédito.
  * 100% Gratuito, sem necessidade de chaves de API externas ou custos de servidor.
  */
-export function parseTransactionFromText(input: string): ParsedTransactionResult {
+export function parseTransactionFromText(
+  input: string,
+  availableCards: CreditCardItem[] = [],
+  availableCategories: CategoryItem[] = [],
+  availableAccounts: AccountItem[] = []
+): ParsedTransactionResult {
   const text = input.trim();
   const normalized = normalizeText(text);
 
@@ -99,25 +105,22 @@ export function parseTransactionFromText(input: string): ParsedTransactionResult
   }
 
   // 1. Extração do Valor
-  // Aceita formatos: R$ 50,00 | R$50 | 50,50 | 50.50 | 50 reais | 1.250,00 | 1250
   let amount = 0;
   let amountMatchStr = '';
 
-  // Regex para capturar padrões numéricos como R$ 1.234,56 ou 50,00 ou 50 reais
   const currencyRegexes = [
     /r\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)/i,
     /([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)\s*(?:reais|real|conto)/i,
     /(?:valor|custou|de|por|gastei|paguei|recebi)\s*(?:de\s*)?(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)/i,
-    /([0-9]+(?:,[0-9]{1,2}))/, // Qualquer 50,00
-    /\b([0-9]+(?:\.[0-9]{1,2}))\b/, // 50.00
-    /\b([0-9]+)\b/ // Número solto
+    /([0-9]+(?:,[0-9]{1,2}))/,
+    /\b([0-9]+(?:\.[0-9]{1,2}))\b/,
+    /\b([0-9]+)\b/
   ];
 
   for (const regex of currencyRegexes) {
     const match = text.match(regex);
     if (match && match[1]) {
       amountMatchStr = match[1];
-      // Normalizar número brasileiro (pontos como milhar, vírgula como decimal)
       let cleaned = amountMatchStr.replace(/\./g, '').replace(',', '.');
       const val = parseFloat(cleaned);
       if (!isNaN(val) && val > 0) {
@@ -129,16 +132,20 @@ export function parseTransactionFromText(input: string): ParsedTransactionResult
 
   // 2. Detecção de Cartão de Crédito
   let detectedCard: string | undefined = undefined;
-  for (const card of KNOWN_CREDIT_CARDS) {
+  const cardsToCheck = availableCards.length > 0 ? availableCards : KNOWN_CREDIT_CARDS;
+
+  for (const card of cardsToCheck) {
     const cardNorm = normalizeText(card.name);
-    const brandNorm = normalizeText(card.brand);
+    const brandNorm = normalizeText(card.brand || '');
     if (
       normalized.includes(cardNorm) || 
-      normalized.includes(`cartao ${brandNorm}`) ||
-      normalized.includes(`cartão ${brandNorm}`) ||
-      normalized.includes(`no ${brandNorm}`) ||
-      normalized.includes(`no cartao ${brandNorm}`) ||
-      normalized.includes(`no cartão ${brandNorm}`)
+      (brandNorm && (
+        normalized.includes(`cartao ${brandNorm}`) ||
+        normalized.includes(`cartão ${brandNorm}`) ||
+        normalized.includes(`no ${brandNorm}`) ||
+        normalized.includes(`no cartao ${brandNorm}`) ||
+        normalized.includes(`no cartão ${brandNorm}`)
+      ))
     ) {
       detectedCard = card.name;
       break;
@@ -156,7 +163,21 @@ export function parseTransactionFromText(input: string): ParsedTransactionResult
   );
 
   if (isGenericCredit) {
-    detectedCard = 'Cartão Neon'; // Primeiro cartão padrão do app
+    detectedCard = cardsToCheck[0]?.name || 'Cartão Neon';
+  }
+
+  // 2.1 Detecção de Conta Bancária / Carteira
+  let detectedAccount: string | undefined = undefined;
+  for (const acc of availableAccounts) {
+    const accNorm = normalizeText(acc.name);
+    const bankNorm = normalizeText(acc.bank || '');
+    if (
+      normalized.includes(accNorm) ||
+      (bankNorm && (normalized.includes(`no ${bankNorm}`) || normalized.includes(`pelo ${bankNorm}`) || normalized.includes(`via ${bankNorm}`)))
+    ) {
+      detectedAccount = acc.name;
+      break;
+    }
   }
 
   // 3. Detecção de Tipo: INCOME (Receita), CREDIT (Cartão), ou EXPENSE (Despesa)
@@ -179,120 +200,95 @@ export function parseTransactionFromText(input: string): ParsedTransactionResult
   // 4. Detecção de Categoria
   let category = type === 'INCOME' ? 'Renda' : (type === 'CREDIT' ? 'Cartão de Crédito' : 'Outros');
 
-  // Busca por categorias conhecidas e suas palavras-chave
-  let matchedKeyword = '';
-  for (const [catName, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    const found = keywords.find(kw => normalized.includes(kw));
-    if (found) {
-      category = catName;
-      matchedKeyword = found;
-      // Se a categoria é de renda e o tipo ainda é despesa, ajusta para renda
-      if (catName === 'Renda' || catName === 'Renda Extra') {
-        type = 'INCOME';
-      }
+  // Verificar categorias customizadas cadastradas pelo usuário
+  for (const cat of availableCategories) {
+    const catNorm = normalizeText(cat.name);
+    if (normalized.includes(catNorm)) {
+      category = cat.name;
       break;
     }
   }
 
-  // 5. Extração de Descrição Limpa
-  // Remove expressões auxiliares para deixar uma descrição profissional
+  // Verificar categorias por palavras-chave mapeadas
+  if (category === 'Outros' || category === 'Cartão de Crédito') {
+    for (const [catName, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+      if (keywords.some(kw => normalized.includes(kw))) {
+        category = catName;
+        break;
+      }
+    }
+  }
+
+  // 5. Extração e Limpeza da Descrição
   let cleanDesc = text;
-  
-  // Remove valor da descrição
+
+  // Remove valores monetários
+  cleanDesc = cleanDesc.replace(/r\$\s*[0-9]+(?:[.,][0-9]+)?/gi, '');
+  cleanDesc = cleanDesc.replace(/[0-9]+(?:[.,][0-9]+)?\s*(?:reais|real|conto)/gi, '');
   if (amountMatchStr) {
-    cleanDesc = cleanDesc.replace(new RegExp(`(r\\$\\s*)?${amountMatchStr.replace('.', '\\.')}(\\s*reais)?`, 'gi'), '');
+    cleanDesc = cleanDesc.replace(new RegExp(`\\b${amountMatchStr.replace('.', '\\.')}\\b`, 'g'), '');
   }
+
+  // Remove palavras de ligação comuns
+  cleanDesc = cleanDesc.replace(/\b(?:gastei|paguei|comprei|recebi|no|na|de|por|com|valor|custou|reais|real|no cartao|no cartão|cartao|cartão|credito|crédito)\b/gi, ' ');
   
-  // Remove termos comuns de comando como "comprei", "gastei com", "paguei", "recebi", "no cartão...", "lançar..."
-  const removePatterns = [
-    /\b(lancar|lançar|anotar|cadastrar|adicionar|registar|registrar|novo lancamento|novo lançamento)\b/gi,
-    /\b(comprei|gastei|paguei|recebi|ganhei|dei|fiz um pix|pix para|transferi|gasto com|compra de|pagamento de)\b/gi,
-    /\b(no cartao neon|no cartao inter|no cartao credicard|no cartao digio|no cartao mercado livre)\b/gi,
-    /\b(no cartão neon|no cartão inter|no cartão credicard|no cartão digio|no cartão mercado livre)\b/gi,
-    /\b(cartao neon|cartao inter|cartao credicard|cartao digio|cartao mercado livre)\b/gi,
-    /\b(cartão neon|cartão inter|cartão credicard|cartão digio|cartão mercado livre)\b/gi,
-    /\b(no cartao de credito|no cartao de crédito|no cartão de crédito|no cartao|no cartão|no credito|no crédito)\b/gi,
-    /\b(no debito|no débito|no pix|em dinheiro|a vista|à vista)\b/gi,
-    /\b(hoje|ontem|agora)\b/gi,
-    /\b(reais|real|conto)\b/gi
-  ];
-
-  for (const pat of removePatterns) {
-    cleanDesc = cleanDesc.replace(pat, '');
+  // Remove menção a cartões identificados
+  if (detectedCard) {
+    cleanDesc = cleanDesc.replace(new RegExp(detectedCard.replace('Cartão ', ''), 'gi'), '');
+    cleanDesc = cleanDesc.replace(/neon|inter|credicard|digio|mercado livre|nubank|c6|santander/gi, '');
   }
 
-  // Limpeza de pontuações soltas e espaços múltiplos
-  cleanDesc = cleanDesc.replace(/[-–—,:;]+/g, ' ').replace(/\s+/g, ' ').trim();
+  cleanDesc = cleanDesc.replace(/\s+/g, ' ').trim();
 
-  // Se a descrição ficou vazia, adota a categoria ou a palavra-chave encontrada
+  // Se a descrição ficou vazia, utiliza a categoria ou termo reconhecido
   if (!cleanDesc || cleanDesc.length < 2) {
-    cleanDesc = matchedKeyword 
-      ? matchedKeyword.charAt(0).toUpperCase() + matchedKeyword.slice(1)
-      : (category !== 'Outros' ? category : (type === 'INCOME' ? 'Receita Diversa' : 'Despesa Geral'));
+    if (category && category !== 'Outros') {
+      cleanDesc = category;
+    } else if (type === 'INCOME') {
+      cleanDesc = 'Receita diversa';
+    } else if (type === 'CREDIT') {
+      cleanDesc = `Compra no ${detectedCard || 'Cartão'}`;
+    } else {
+      cleanDesc = 'Lançamento financeiro';
+    }
   } else {
-    // Primeira letra maiúscula
+    // Capitaliza primeira letra
     cleanDesc = cleanDesc.charAt(0).toUpperCase() + cleanDesc.slice(1);
   }
 
-  // Se o tipo for CREDIT mas a categoria foi identificada especificamente (ex: Alimentação),
-  // mantemos ou associamos.
-  if (type === 'CREDIT' && category === 'Outros') {
-    category = 'Cartão de Crédito';
-  }
+  // 6. Confirmação de status consolidado
+  const consolidated = type === 'INCOME' || (normalized.includes('pago') || normalized.includes('paguei') || normalized.includes('debitado') || normalized.includes('pix'));
 
-  // Status consolidado: Se disse "pago", "já paguei", "liquidado", "consolidado", ou se for dinheiro/pix
-  const isAlreadyPaid = (
-    normalized.includes('ja paguei') ||
-    normalized.includes('já paguei') ||
-    normalized.includes('pago') ||
-    normalized.includes('liquidado') ||
-    normalized.includes('debitado') ||
-    normalized.includes('no pix') ||
-    type === 'INCOME'
-  );
+  const success = amount > 0;
+  const confidence = (amount > 0 && cleanDesc.length > 2) ? 'high' : (amount > 0 ? 'medium' : 'low');
 
-  const consolidated = type === 'CREDIT' ? false : isAlreadyPaid;
-
-  const confidence = amount > 0 ? 'high' : 'medium';
-  
-  let explanation = '';
-  if (amount > 0) {
-    const formattedAmount = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    if (type === 'INCOME') {
-      explanation = `Identifiquei uma receita de ${formattedAmount} em "${category}" (${cleanDesc}).`;
-    } else if (type === 'CREDIT') {
-      explanation = `Identifiquei um gasto no ${detectedCard || 'Cartão'} de ${formattedAmount} (${cleanDesc}).`;
-    } else {
-      explanation = `Identifiquei uma despesa de ${formattedAmount} em "${category}" (${cleanDesc}).`;
-    }
-  } else {
-    explanation = 'Não consegui identificar o valor com exatidão. Por favor, especifique o valor (ex: "Almoço 35,00").';
-  }
+  const explanation = success
+    ? `Entendi: ${type === 'INCOME' ? 'Receita' : (type === 'CREDIT' ? 'Compra no Cartão' : 'Despesa')} de R$ ${amount.toFixed(2).replace('.', ',')} para "${cleanDesc}" na categoria "${category}"${detectedCard ? ` (${detectedCard})` : ''}${detectedAccount ? ` [${detectedAccount}]` : ''}.`
+    : 'Não consegui identificar o valor em reais. Tente digitar algo como "Almoço 35 reais no Cartão Nubank" ou "Salário 2500".';
 
   return {
-    success: amount > 0,
+    success,
     rawText: text,
     description: cleanDesc,
     amount,
     type,
     category,
     cardName: detectedCard,
+    accountName: detectedAccount,
     consolidated,
-    date: new Date().toISOString().split('T')[0],
     explanation,
     confidence
   };
 }
 
-/**
- * Exemplos rápidos prontos para o usuário clicar e testar sem digitar nada
- */
 export const QUICK_CHAT_SUGGESTIONS = [
-  'Almoço restaurante 38,50 no débito',
-  'Gasolina 150,00 no Cartão Neon',
-  'Supermercado 240,00',
-  'Salário 3.200,00',
-  'Uber para o trabalho 24,90',
-  'Farmácia remédios 65,00 no Cartão Inter',
-  'Venda de desapego 120,00 pix recebido'
+  'Almoço 42,50 no Cartão Neon',
+  'Salário 3200 recebido',
+  'Gasolina 120 reais no Inter',
+  'Farmácia 65,90',
+  'Uber 24 reais no crédito',
+  'Mercado 285 reais no Credicard',
+  'Internet 99,90 pago',
+  'Freelance 500 reais',
 ];
+

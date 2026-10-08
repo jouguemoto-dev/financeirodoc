@@ -20,6 +20,10 @@
           "description": "User's profile photo URL",
           "maxLength": 500
         },
+        "isZeroed": {
+          "type": "boolean",
+          "description": "Whether the user zeroed account data"
+        },
         "createdAt": {
           "type": "string",
           "description": "Creation timestamp"
@@ -65,6 +69,16 @@
           "description": "Credit card name if applicable",
           "maxLength": 60
         },
+        "accountId": {
+          "type": "string",
+          "description": "Bank account ID if applicable",
+          "maxLength": 60
+        },
+        "accountName": {
+          "type": "string",
+          "description": "Bank account name if applicable",
+          "maxLength": 60
+        },
         "userId": {
           "type": "string",
           "description": "Owner user ID",
@@ -80,6 +94,144 @@
         }
       },
       "required": ["description", "amount", "type", "category", "consolidated", "userId"]
+    },
+    "CreditCard": {
+      "title": "CreditCard",
+      "description": "User credit card details",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Card display name",
+          "maxLength": 60
+        },
+        "brand": {
+          "type": "string",
+          "description": "Card brand / bank",
+          "maxLength": 40
+        },
+        "limit": {
+          "type": "number",
+          "description": "Credit limit in BRL"
+        },
+        "closingDay": {
+          "type": "number",
+          "description": "Billing statement closing day of month"
+        },
+        "dueDay": {
+          "type": "number",
+          "description": "Payment due day of month"
+        },
+        "color": {
+          "type": "string",
+          "description": "Card styling theme / color tag",
+          "maxLength": 60
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["name", "userId"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "Financial bank account or wallet",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Account name",
+          "maxLength": 60
+        },
+        "bank": {
+          "type": "string",
+          "description": "Financial institution name",
+          "maxLength": 40
+        },
+        "type": {
+          "type": "string",
+          "description": "Account type",
+          "enum": ["CHECKING", "SAVINGS", "INVESTMENT", "CASH", "OTHER"]
+        },
+        "balance": {
+          "type": "number",
+          "description": "Current balance in BRL"
+        },
+        "color": {
+          "type": "string",
+          "description": "Account color styling",
+          "maxLength": 40
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["name", "type", "balance", "userId"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Budget category for transactions",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Category name",
+          "maxLength": 60
+        },
+        "type": {
+          "type": "string",
+          "description": "Transaction nature",
+          "enum": ["EXPENSE", "INCOME", "BOTH"]
+        },
+        "color": {
+          "type": "string",
+          "description": "Badge color",
+          "maxLength": 40
+        },
+        "icon": {
+          "type": "string",
+          "description": "Category icon key",
+          "maxLength": 40
+        },
+        "budget": {
+          "type": "number",
+          "description": "Monthly budget target limit"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["name", "type", "userId"]
     }
   },
   "firestore": {
@@ -90,6 +242,18 @@
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",
       "description": "User financial transactions"
+    },
+    "/users/{userId}/cards/{cardId}": {
+      "schema": "CreditCard",
+      "description": "User credit cards"
+    },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": "Account",
+      "description": "User bank accounts and wallets"
+    },
+    "/users/{userId}/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "User expense and income categories"
     }
   }
 }

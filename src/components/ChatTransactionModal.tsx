@@ -15,7 +15,7 @@ import {
   CheckCircle2,
   Trash2
 } from 'lucide-react';
-import { Transaction, TransactionType } from '../types';
+import { Transaction, TransactionType, CreditCardItem, CategoryItem, AccountItem } from '../types';
 import { parseTransactionFromText, ParsedTransactionResult, QUICK_CHAT_SUGGESTIONS } from '../utils/chatTransactionParser';
 import { formatCurrency } from '../utils/formatters';
 
@@ -32,6 +32,9 @@ interface ChatTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLaunchTransaction: (tx: Omit<Transaction, 'id'>) => Promise<void> | void;
+  cards?: CreditCardItem[];
+  categories?: CategoryItem[];
+  accounts?: AccountItem[];
   isDark: boolean;
 }
 
@@ -39,6 +42,9 @@ export const ChatTransactionModal: React.FC<ChatTransactionModalProps> = ({
   isOpen,
   onClose,
   onLaunchTransaction,
+  cards = [],
+  categories = [],
+  accounts = [],
   isDark,
 }) => {
   const [inputText, setInputText] = useState('');
@@ -91,7 +97,7 @@ export const ChatTransactionModal: React.FC<ChatTransactionModalProps> = ({
     setMessages((prev) => [...prev, userMsg]);
 
     // Análise inteligente gratuita e imediata no próprio navegador
-    const parsed = parseTransactionFromText(messageContent);
+    const parsed = parseTransactionFromText(messageContent, cards, categories, accounts);
 
     setTimeout(() => {
       const assistantMsgId = `ast_${Date.now()}`;

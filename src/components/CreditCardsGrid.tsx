@@ -1,28 +1,44 @@
 import React from 'react';
-import { CreditCard, Check, Clock, Plus, ExternalLink, ChevronRight, FileText } from 'lucide-react';
-import { Transaction } from '../types';
+import { CreditCard, Check, Clock, Plus, ExternalLink, ChevronRight, FileText, Settings2 } from 'lucide-react';
+import { Transaction, CreditCardItem } from '../types';
 import { formatMoney } from '../utils/formatters';
 
 interface CreditCardsGridProps {
   transactions: Transaction[];
+  cards?: CreditCardItem[];
   onToggleStatus: (id: string) => void;
   onFilterByCard: (cardName: string) => void;
   onOpenInstallmentForCard: (cardName: string) => void;
   onSelectCardForInvoice: (card: Transaction) => void;
+  onOpenNewCard?: () => void;
+  onEditCard?: (card: CreditCardItem) => void;
   isDark?: boolean;
 }
 
 export const CreditCardsGrid: React.FC<CreditCardsGridProps> = ({
   transactions,
+  cards = [],
   onToggleStatus,
   onFilterByCard,
   onOpenInstallmentForCard,
   onSelectCardForInvoice,
+  onOpenNewCard,
+  onEditCard,
   isDark = false,
 }) => {
   const creditCards = transactions.filter((t) => t.type === 'CREDIT');
 
-  const getCardStyle = (name: string) => {
+  const getCardStyle = (name: string, customColor?: string) => {
+    if (customColor && customColor.includes('from-')) {
+      return {
+        bg: customColor,
+        border: isDark ? 'border-slate-800 hover:border-slate-600' : 'border-slate-200 hover:border-slate-400 shadow-xs hover:shadow-md',
+        badge: 'text-amber-400 bg-amber-950/60 border-amber-800/60',
+        title: isDark ? 'text-slate-200' : 'text-slate-800',
+        amount: isDark ? 'text-white' : 'text-slate-900',
+      };
+    }
+
     const lower = name.toLowerCase();
     if (lower.includes('neon')) {
       return isDark ? {
@@ -51,6 +67,21 @@ export const CreditCardsGrid: React.FC<CreditCardsGridProps> = ({
         border: 'border-orange-200 hover:border-orange-400 shadow-xs hover:shadow-md',
         badge: 'text-orange-700 bg-orange-100/70 border-orange-200',
         title: 'text-orange-950',
+        amount: 'text-slate-900',
+      };
+    }
+    if (lower.includes('nubank')) {
+      return isDark ? {
+        bg: 'from-purple-950/40 to-slate-900',
+        border: 'border-purple-800/40 hover:border-purple-600',
+        badge: 'text-purple-400 bg-purple-950/60 border-purple-800/60',
+        title: 'text-slate-200',
+        amount: 'text-white',
+      } : {
+        bg: 'from-purple-50/90 via-white to-white',
+        border: 'border-purple-200 hover:border-purple-400 shadow-xs hover:shadow-md',
+        badge: 'text-purple-700 bg-purple-100/70 border-purple-200',
+        title: 'text-purple-950',
         amount: 'text-slate-900',
       };
     }
@@ -133,18 +164,36 @@ export const CreditCardsGrid: React.FC<CreditCardsGridProps> = ({
           </div>
         </div>
 
-        <span className={`text-xs inline-flex items-center gap-1 font-medium px-2.5 py-1 rounded-full border ${
-          isDark 
-            ? 'bg-slate-900 border-slate-800 text-slate-300' 
-            : 'bg-white border-slate-200 text-slate-600 shadow-2xs'
-        }`}>
-          <span>{creditCards.length} cartões ativos</span>
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs inline-flex items-center gap-1 font-medium px-2.5 py-1 rounded-full border ${
+            isDark 
+              ? 'bg-slate-900 border-slate-800 text-slate-300' 
+              : 'bg-white border-slate-200 text-slate-600 shadow-2xs'
+          }`}>
+            <span>{creditCards.length} cartões ativos</span>
+          </span>
+
+          {onOpenNewCard && (
+            <button
+              onClick={onOpenNewCard}
+              className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer"
+              title="Cadastrar novo cartão de crédito"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Novo Cartão</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         {creditCards.map((card) => {
-          const style = getCardStyle(card.description);
+          const cardMeta = cards.find(
+            (c) => c.name.toLowerCase() === card.description.toLowerCase() ||
+                   c.name.toLowerCase() === (card.cardName || '').toLowerCase()
+          );
+
+          const style = getCardStyle(card.description, cardMeta?.color);
           const shortName = card.description.replace('Cartão ', '');
 
           return (
@@ -159,8 +208,23 @@ export const CreditCardsGrid: React.FC<CreditCardsGridProps> = ({
                   <span className={`text-xs font-bold tracking-tight uppercase ${style.title}`}>
                     {shortName}
                   </span>
-                  <div className={`p-1 rounded-md ${style.badge} border group-hover:scale-110 transition-transform`}>
-                    <CreditCard className="w-3.5 h-3.5" />
+                  <div className="flex items-center gap-1">
+                    {cardMeta && onEditCard && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditCard(cardMeta);
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-black/20 transition-colors"
+                        title="Configurar limites e datas deste cartão"
+                      >
+                        <Settings2 className="w-3 h-3" />
+                      </button>
+                    )}
+                    <div className={`p-1 rounded-md ${style.badge} border group-hover:scale-110 transition-transform`}>
+                      <CreditCard className="w-3.5 h-3.5" />
+                    </div>
                   </div>
                 </div>
 
@@ -168,12 +232,19 @@ export const CreditCardsGrid: React.FC<CreditCardsGridProps> = ({
                   {formatMoney(card.amount)}
                 </div>
 
-                {/* Tag de Ação Interativa */}
+                {/* Tag de Ação Interativa & Metadados */}
                 <div className="mt-1 flex items-center gap-1 text-[11px] text-emerald-600 font-semibold group-hover:underline">
                   <FileText className="w-3 h-3" />
                   <span>Abrir fatura & valor</span>
                   <ChevronRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
+
+                {cardMeta && (cardMeta.limit || cardMeta.dueDay) && (
+                  <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                    {cardMeta.limit && <span>Lim: {formatMoney(cardMeta.limit)}</span>}
+                    {cardMeta.dueDay && <span>Vence: dia {cardMeta.dueDay}</span>}
+                  </div>
+                )}
               </div>
 
               {/* Status de Pagamento */}
@@ -249,6 +320,27 @@ export const CreditCardsGrid: React.FC<CreditCardsGridProps> = ({
             </div>
           );
         })}
+
+        {/* Card para Adicionar Novo Cartão */}
+        {onOpenNewCard && (
+          <button
+            type="button"
+            onClick={onOpenNewCard}
+            className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer min-h-[170px] group ${
+              isDark 
+                ? 'border-slate-800 hover:border-amber-500/50 hover:bg-amber-950/10 text-slate-400 hover:text-amber-400' 
+                : 'border-slate-200 hover:border-amber-300 hover:bg-amber-50/50 text-slate-500 hover:text-amber-600'
+            }`}
+          >
+            <div className="p-2 rounded-full bg-amber-500/10 text-amber-500 group-hover:scale-110 transition-transform">
+              <Plus className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-bold">Novo Cartão</span>
+            <span className="text-[10px] text-slate-400 text-center">
+              Cadastre bandeira, limites e vencimentos
+            </span>
+          </button>
+        )}
       </div>
     </section>
   );
